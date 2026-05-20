@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+
+{% if categories is not none %}
+  <h1 class="page-title">{{ t.categories }}</h1>
+  <p class="page-sub">{{ t.phase1_subheading }}</p>
+
+  <div class="grid grid--categories">
+    {% for c in categories %}
+      <a class="card card--category" href="{{ url_for('cashier.category', cat_id=c.id) }}">
+        <div class="card__title">{{ c.name_ar }}</div>
+        <div class="card__meta">{{ c.item_count }} {{ t.phase1_items_count }}</div>
+      </a>
+    {% endfor %}
+  </div>
+{% endif %}
+
+{% if items is not none %}
+  <div class="page-head">
+    <a class="btn btn--back" href="{{ url_for('cashier.index') }}">‹ {{ t.phase1_back_to_categories }}</a>
+    <h1 class="page-title">{{ category.name_ar }}</h1>
+  </div>
+
+  {% if items|length == 0 %}
+    <p class="empty">{{ t.phase1_no_items }}</p>
+  {% else %}
+    <div class="grid grid--items">
+      {% for i in items %}
+        <div class="card card--item">
+          <div class="card__title">{{ i.name_ar }}</div>
+          <div class="card__price"><span class="currency">{{ t.currency }}</span> {{ "%.2f"|format(i.price) }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endif %}
+
+{% endblock %}

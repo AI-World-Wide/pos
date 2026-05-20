@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Runtime data
+data/pos.db
+data/pos.db-journal
+data/pos.db-wal
+data/pos.db-shm
+data/backups/
+data/error.log
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+Thumbs.db
+.DS_Store
+
+# Secrets
+.env
+.env.local
+config.local.ini
