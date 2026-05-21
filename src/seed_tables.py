@@ -11,11 +11,11 @@ from __future__ import annotations
 from src.models import Area, FloorTable
 
 DEFAULT_AREAS = [
-    {"name_en": "Indoor", "name_ar": "الصالة الداخلية", "sort_order": 1, "tables": 15, "label_prefix": "طاولة"},
-    {"name_en": "Outdoor", "name_ar": "الصالة الخارجية", "sort_order": 2, "tables": 15, "label_prefix": "طاولة"},
-    {"name_en": "Upstairs", "name_ar": "الطابق العلوي", "sort_order": 3, "tables": 15, "label_prefix": "طاولة"},
-    {"name_en": "Cabins", "name_ar": "الكبائن", "sort_order": 4, "tables": 6, "label_prefix": "كابينة"},
-    {"name_en": "Credit", "name_ar": "الآجل", "sort_order": 99, "tables": 0, "label_prefix": "", "is_credit": True},
+    {"name_en": "Area 1", "name_ar": "منطقة 1", "sort_order": 1, "tables": 15},
+    {"name_en": "Area 2", "name_ar": "منطقة 2", "sort_order": 2, "tables": 15},
+    {"name_en": "Area 3", "name_ar": "منطقة 3", "sort_order": 3, "tables": 15},
+    {"name_en": "Cabins", "name_ar": "الكبائن", "sort_order": 4, "tables": 6},
+    {"name_en": "Credit", "name_ar": "الآجل", "sort_order": 99, "tables": 0, "is_credit": True},
 ]
 
 
@@ -35,12 +35,11 @@ def seed_areas_and_tables(session) -> None:
         session.flush()
 
         for i in range(1, area_def["tables"] + 1):
-            prefix = area_def["label_prefix"]
             session.add(FloorTable(
                 area_id=area.id,
                 number=i,
-                label_ar=f"{prefix} {i}" if prefix else f"{i}",
-                capacity=4 if prefix != "كابينة" else 8,
+                label_ar=str(i),
+                capacity=4 if area_def["name_en"] != "Cabins" else 8,
                 status="free",
                 visible=True,
             ))

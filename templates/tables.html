@@ -37,7 +37,7 @@
     {% for t_ in tables %}
       <div class="table-card table-card--{{ t_.status }}">
         <div class="table-card__header">
-          <span class="table-card__label">{{ t_.label_ar }}</span>
+          <span class="table-card__label">{{ t_.number }}</span>
           {% if t_.status == 'occupied' %}
             <span class="table-card__total">{{ t.currency }} {{ "%.2f"|format(t_.order_total) }}</span>
           {% endif %}
