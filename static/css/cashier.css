@@ -217,6 +217,19 @@
   margin-top: 4px;
 }
 
+/* --- Table action bar (shown when order is linked to a floor table) --- */
+.order-table-actions {
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #34495e;
+}
+.order-table-actions .action-btn {
+  flex: 1;
+  min-height: 40px;
+  font-size: 14px;
+}
+
 /* --- Action bar --- */
 .order-actions {
   display: grid;

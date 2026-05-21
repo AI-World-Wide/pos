@@ -134,17 +134,22 @@
   box-shadow: 0 1px 4px rgba(0,0,0,0.06);
   border-right: 5px solid #ccc;
 }
-.table-card--free { border-color: #27ae60; }
-.table-card--occupied { border-color: #e74c3c; background: #fff8f6; }
-.table-card--reserved { border-color: #f39c12; }
+.table-card--free { border-color: #27ae60; background: #f0faf3; }
+.table-card--occupied {
+  border-color: #e74c3c;
+  background: #fce4e4;
+  box-shadow: 0 2px 8px rgba(231,76,60,0.15);
+}
+.table-card--reserved { border-color: #f39c12; background: #fef9e7; }
 .table-card__header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 6px;
 }
-.table-card__label { font-size: 18px; font-weight: 700; }
-.table-card__total { font-size: 16px; font-weight: 700; color: #e74c3c; }
+.table-card__label { font-size: 28px; font-weight: 700; }
+.table-card--occupied .table-card__label { color: #c0392b; }
+.table-card__total { font-size: 18px; font-weight: 700; color: #c0392b; }
 .table-card__status { font-size: 14px; color: #666; margin-bottom: 8px; }
 .table-card__status small { display: block; font-size: 12px; color: #999; }
 .table-card__actions { display: flex; flex-wrap: wrap; gap: 4px; }

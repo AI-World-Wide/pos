@@ -47,6 +47,13 @@
   </div>
 </div>
 
+{% if order.table_id %}
+<div class="order-table-actions">
+  <a href="{{ url_for('tables.floor_plan') }}" class="action-btn action-btn--held" style="text-decoration:none">{{ t.tables }}</a>
+  <a href="{{ url_for('tables.split_form', table_id=order.table_id) }}" class="action-btn action-btn--hold" style="text-decoration:none">{{ t.split_items }}</a>
+</div>
+{% endif %}
+
 <div class="order-actions">
   <button class="action-btn action-btn--hold"
           hx-post="{{ url_for('cashier.hold_order') }}"

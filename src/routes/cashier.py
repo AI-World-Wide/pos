@@ -379,6 +379,7 @@ def _get_order_view_data(db, order=None) -> dict:
             "vat_amount": 0,
             "total": 0,
             "status": "open",
+            "table_id": None,
         }
     lines = [
         {
@@ -399,4 +400,5 @@ def _get_order_view_data(db, order=None) -> dict:
         "vat_amount": order.vat_amount or 0,
         "total": order.total or 0,
         "status": order.status,
+        "table_id": order.table_id,
     }
