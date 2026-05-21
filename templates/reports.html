@@ -3,15 +3,27 @@
 <h1 class="page-title">{{ t.reports_title }}</h1>
 
 <div class="tabs">
-  <a class="tab {% if period == 'today' %}tab--active{% endif %}"
-     href="{{ url_for('reports.index', period='today') }}">{{ t.today }}</a>
-  <a class="tab {% if period == 'yesterday' %}tab--active{% endif %}"
-     href="{{ url_for('reports.index', period='yesterday') }}">{{ t.yesterday }}</a>
-  <a class="tab {% if period == 'week' %}tab--active{% endif %}"
-     href="{{ url_for('reports.index', period='week') }}">{{ t.this_week }}</a>
-  <a class="tab {% if period == 'month' %}tab--active{% endif %}"
-     href="{{ url_for('reports.index', period='month') }}">{{ t.this_month }}</a>
+  <a class="tab {% if period == 'today' %}tab--active{% endif %}" href="{{ url_for('reports.index', period='today') }}">{{ t.today }}</a>
+  <a class="tab {% if period == 'yesterday' %}tab--active{% endif %}" href="{{ url_for('reports.index', period='yesterday') }}">{{ t.yesterday }}</a>
+  <a class="tab {% if period == 'week' %}tab--active{% endif %}" href="{{ url_for('reports.index', period='week') }}">{{ t.this_week }}</a>
+  <a class="tab {% if period == 'month' %}tab--active{% endif %}" href="{{ url_for('reports.index', period='month') }}">{{ t.this_month }}</a>
 </div>
+
+<!-- Current shift banner -->
+{% if shift_stats %}
+<div style="background:#d4edda;border:1px solid #28a745;border-radius:10px;padding:12px 18px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;font-size:15px">
+  <span>{{ t.day_is_open }} — {{ shift_stats.opened_at }}</span>
+  <span>{{ t.shift_sales }}: <strong>{{ t.currency }} {{ "%.2f"|format(shift_stats.total_sales) }}</strong> | {{ shift_stats.order_count }} {{ t.shift_orders }}</span>
+</div>
+{% endif %}
+
+<!-- Credit banner -->
+{% if credit.count > 0 %}
+<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:10px;padding:12px 18px;margin-bottom:16px;display:flex;justify-content:space-between;font-size:15px">
+  <span>{{ t.credit_area }}: <strong>{{ credit.count }}</strong> {{ t.credit_tables }}</span>
+  <span>{{ t.total_credit }}: <strong>{{ t.currency }} {{ "%.2f"|format(credit.total) }}</strong></span>
+</div>
+{% endif %}
 
 <!-- Summary stats -->
 <div class="stats-grid">
@@ -31,9 +43,54 @@
     <div class="stat-card__value">{{ t.currency }} {{ "%.2f"|format(summary.avg_order_value) }}</div>
     <div class="stat-card__label">{{ t.avg_order_value }}</div>
   </div>
+  <div class="stat-card">
+    <div class="stat-card__value">{{ avg_items }}</div>
+    <div class="stat-card__label">{{ t.avg_items_per_order }}</div>
+  </div>
+  {% if peak %}
+  <div class="stat-card">
+    <div class="stat-card__value">{{ peak.peak.hour }}:00</div>
+    <div class="stat-card__label">{{ t.peak_hours }}</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Payment breakdown -->
+<div class="stats-grid" style="margin-bottom:20px">
+  <div class="stat-card" style="border-right:4px solid #27ae60">
+    <div class="stat-card__value">{{ t.currency }} {{ "%.2f"|format(payments.cash) }}</div>
+    <div class="stat-card__label">{{ t.cash_payments }} ({{ payments.cash_count }})</div>
+  </div>
+  <div class="stat-card" style="border-right:4px solid #2980b9">
+    <div class="stat-card__value">{{ t.currency }} {{ "%.2f"|format(payments.card) }}</div>
+    <div class="stat-card__label">{{ t.card_payments }} ({{ payments.card_count }})</div>
+  </div>
+  {% if credit.total > 0 %}
+  <div class="stat-card" style="border-right:4px solid #e67e22">
+    <div class="stat-card__value">{{ t.currency }} {{ "%.2f"|format(credit.total) }}</div>
+    <div class="stat-card__label">{{ t.credit_payments }} ({{ credit.count }})</div>
+  </div>
+  {% endif %}
 </div>
 
 <a href="{{ url_for('reports.export_csv', period=period) }}" class="btn btn--primary" style="margin-bottom:20px">{{ t.export_csv }}</a>
+
+<!-- 7-day trend -->
+{% if trend %}
+<div class="card" style="margin-bottom:20px">
+  <h2 style="font-size:20px;margin-bottom:12px">{{ t.daily_trend }}</h2>
+  <div style="display:flex;gap:8px;align-items:end;height:120px">
+    {% set max_rev = trend|map(attribute='revenue')|max %}
+    {% for d in trend %}
+      <div style="flex:1;text-align:center">
+        <div style="background:#b8954a;border-radius:4px 4px 0 0;width:100%;height:{{ (d.revenue / max_rev * 100) if max_rev > 0 else 0 }}px;min-height:2px;margin-bottom:4px" title="{{ t.currency }} {{ '%.2f'|format(d.revenue) }}"></div>
+        <div style="font-size:11px;color:#666">{{ d.date }}</div>
+        <div style="font-size:10px;color:#999">{{ d.orders }}</div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
 
@@ -42,22 +99,14 @@
     <h2 style="font-size:20px;margin-bottom:12px">{{ t.top_items }}</h2>
     {% if top_items %}
     <table class="data-table">
-      <thead>
-        <tr><th>{{ t.item }}</th><th>{{ t.qty }}</th><th>{{ t.price }}</th></tr>
-      </thead>
+      <thead><tr><th>{{ t.item }}</th><th>{{ t.qty }}</th><th>{{ t.price }}</th></tr></thead>
       <tbody>
         {% for i in top_items %}
-        <tr>
-          <td>{{ i.name_ar }}</td>
-          <td>{{ i.qty }}</td>
-          <td>{{ t.currency }} {{ "%.2f"|format(i.revenue) }}</td>
-        </tr>
+        <tr><td>{{ i.name_ar }}</td><td>{{ i.qty }}</td><td>{{ t.currency }} {{ "%.2f"|format(i.revenue) }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
-    {% else %}
-      <p style="color:#999">{{ t.no_data }}</p>
-    {% endif %}
+    {% else %}<p style="color:#999">{{ t.no_data }}</p>{% endif %}
   </div>
 
   <!-- Sales by category -->
@@ -65,22 +114,14 @@
     <h2 style="font-size:20px;margin-bottom:12px">{{ t.sales_by_category }}</h2>
     {% if by_category %}
     <table class="data-table">
-      <thead>
-        <tr><th>{{ t.categories }}</th><th>{{ t.qty }}</th><th>{{ t.price }}</th></tr>
-      </thead>
+      <thead><tr><th>{{ t.categories }}</th><th>{{ t.qty }}</th><th>{{ t.price }}</th></tr></thead>
       <tbody>
         {% for c in by_category %}
-        <tr>
-          <td>{{ c.name_ar }}</td>
-          <td>{{ c.qty }}</td>
-          <td>{{ t.currency }} {{ "%.2f"|format(c.revenue) }}</td>
-        </tr>
+        <tr><td>{{ c.name_ar }}</td><td>{{ c.qty }}</td><td>{{ t.currency }} {{ "%.2f"|format(c.revenue) }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
-    {% else %}
-      <p style="color:#999">{{ t.no_data }}</p>
-    {% endif %}
+    {% else %}<p style="color:#999">{{ t.no_data }}</p>{% endif %}
   </div>
 
   <!-- Sales by hour -->
@@ -88,22 +129,14 @@
     <h2 style="font-size:20px;margin-bottom:12px">{{ t.sales_by_hour }}</h2>
     {% if by_hour %}
     <table class="data-table">
-      <thead>
-        <tr><th>{{ t.sales_by_hour }}</th><th>{{ t.order_count }}</th><th>{{ t.price }}</th></tr>
-      </thead>
+      <thead><tr><th>{{ t.sales_by_hour }}</th><th>{{ t.order_count }}</th><th>{{ t.price }}</th></tr></thead>
       <tbody>
         {% for h in by_hour %}
-        <tr>
-          <td>{{ h.hour }}:00</td>
-          <td>{{ h.count }}</td>
-          <td>{{ t.currency }} {{ "%.2f"|format(h.revenue) }}</td>
-        </tr>
+        <tr><td>{{ h.hour }}:00</td><td>{{ h.count }}</td><td>{{ t.currency }} {{ "%.2f"|format(h.revenue) }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
-    {% else %}
-      <p style="color:#999">{{ t.no_data }}</p>
-    {% endif %}
+    {% else %}<p style="color:#999">{{ t.no_data }}</p>{% endif %}
   </div>
 
   <!-- Sales by cashier -->
@@ -111,23 +144,29 @@
     <h2 style="font-size:20px;margin-bottom:12px">{{ t.sales_by_cashier }}</h2>
     {% if by_cashier %}
     <table class="data-table">
-      <thead>
-        <tr><th>{{ t.receipt_cashier }}</th><th>{{ t.order_count }}</th><th>{{ t.price }}</th></tr>
-      </thead>
+      <thead><tr><th>{{ t.receipt_cashier }}</th><th>{{ t.order_count }}</th><th>{{ t.price }}</th></tr></thead>
       <tbody>
         {% for c in by_cashier %}
-        <tr>
-          <td>{{ c.cashier }}</td>
-          <td>{{ c.count }}</td>
-          <td>{{ t.currency }} {{ "%.2f"|format(c.revenue) }}</td>
-        </tr>
+        <tr><td>{{ c.cashier }}</td><td>{{ c.count }}</td><td>{{ t.currency }} {{ "%.2f"|format(c.revenue) }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
-    {% else %}
-      <p style="color:#999">{{ t.no_data }}</p>
-    {% endif %}
+    {% else %}<p style="color:#999">{{ t.no_data }}</p>{% endif %}
   </div>
 
+  <!-- Credit details -->
+  {% if credit.tables %}
+  <div class="card" style="grid-column:span 2">
+    <h2 style="font-size:20px;margin-bottom:12px">{{ t.credit_area }} — {{ t.total_credit }}: {{ t.currency }} {{ "%.2f"|format(credit.total) }}</h2>
+    <table class="data-table">
+      <thead><tr><th>{{ t.table }}</th><th>{{ t.order_number }}</th><th>{{ t.receipt_date }}</th><th>{{ t.total }}</th></tr></thead>
+      <tbody>
+        {% for ct in credit.tables %}
+        <tr><td>{{ ct.label }}</td><td>{{ ct.order_number }}</td><td>{{ ct.created }}</td><td>{{ t.currency }} {{ "%.2f"|format(ct.total) }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

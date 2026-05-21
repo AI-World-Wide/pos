@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="page-title">{{ t.floor_plan }}</h1>
+
+<!-- Credit area banner if viewing any area -->
+{% if credit_stats.count > 0 %}
+<div class="credit-banner">
+  <span>{{ t.credit_area }}: <strong>{{ credit_stats.count }}</strong> {{ t.credit_tables }}</span>
+  <span>{{ t.total_credit }}: <strong>{{ t.currency }} {{ "%.2f"|format(credit_stats.total) }}</strong></span>
+</div>
+{% endif %}
+
+<!-- Area tabs -->
+<div class="tabs">
+  {% for a in areas %}
+    <a class="tab {% if current_area and current_area.id == a.id %}tab--active{% endif %}
+              {% if a.is_credit %}tab--credit{% endif %}"
+       href="{{ url_for('tables.floor_plan', area=a.id) }}">
+      {{ a.name_ar }}
+      {% if a.is_credit and credit_stats.count > 0 %}
+        <span class="tab__badge">{{ credit_stats.count }}</span>
+      {% endif %}
+    </a>
+  {% endfor %}
+  {% if session.get('role') == 'admin' %}
+  <form method="post" action="{{ url_for('tables.add_area') }}" style="display:flex;gap:4px;margin-right:auto">
+    <input class="form-input" name="name_ar" placeholder="{{ t.add_area }}" style="height:36px;width:120px" required>
+    <input type="hidden" name="name_en" value="">
+    <button type="submit" class="btn btn--success btn--sm" onclick="this.form.name_en.value=this.form.name_ar.value">+</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if current_area %}
+  <!-- Table grid -->
+  <div class="table-grid">
+    {% for t_ in tables %}
+      <div class="table-card table-card--{{ t_.status }}">
+        <div class="table-card__header">
+          <span class="table-card__label">{{ t_.label_ar }}</span>
+          {% if t_.status == 'occupied' %}
+            <span class="table-card__total">{{ t.currency }} {{ "%.2f"|format(t_.order_total) }}</span>
+          {% endif %}
+        </div>
+
+        <div class="table-card__status">
+          {% if t_.status == 'free' %}
+            {{ t.table_status_free }}
+          {% elif t_.status == 'occupied' %}
+            {{ t.table_status_occupied }}
+            {% if t_.order_number %}<small>{{ t_.order_number }}</small>{% endif %}
+          {% endif %}
+        </div>
+
+        <div class="table-card__actions">
+          {% if t_.status == 'free' %}
+            <form method="post" action="{{ url_for('tables.open_table', table_id=t_.id) }}">
+              <button type="submit" class="btn btn--success btn--sm">{{ t.open_table }}</button>
+            </form>
+          {% elif t_.status == 'occupied' %}
+            <form method="post" action="{{ url_for('tables.open_table', table_id=t_.id) }}" style="display:inline">
+              <button type="submit" class="btn btn--primary btn--sm">{{ t.items }}</button>
+            </form>
+            <a href="{{ url_for('tables.split_form', table_id=t_.id) }}" class="btn btn--secondary btn--sm">{{ t.split_items }}</a>
+
+            <!-- Move dropdown -->
+            <div class="table-move">
+              <form method="post" action="{{ url_for('tables.move_table', table_id=t_.id) }}" style="display:flex;gap:4px">
+                <select name="target_area_id" class="form-select" style="height:30px;width:auto;font-size:12px">
+                  {% for a in all_areas %}
+                    {% if a.id != current_area.id %}
+                      <option value="{{ a.id }}">{{ a.name_ar }}</option>
+                    {% endif %}
+                  {% endfor %}
+                </select>
+                <button type="submit" class="btn btn--secondary btn--sm" style="font-size:11px">{{ t.move_to }}</button>
+              </form>
+            </div>
+          {% endif %}
+
+          {% if session.get('role') == 'admin' and t_.status == 'free' %}
+            <form method="post" action="{{ url_for('tables.delete_table', table_id=t_.id) }}" style="display:inline">
+              <button type="submit" class="btn btn--danger btn--sm" onclick="return confirm('?')">×</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+
+    {% if tables|length == 0 %}
+      <div class="empty-msg" style="grid-column:1/-1">{{ t.no_tables }}</div>
+    {% endif %}
+  </div>
+
+  {% if session.get('role') == 'admin' %}
+  <form method="post" action="{{ url_for('tables.add_table_to_area', area_id=current_area.id) }}"
+        style="display:flex;gap:8px;margin-top:16px">
+    <input class="form-input" name="label_ar" placeholder="{{ t.add_table }}" style="height:40px;width:200px">
+    <button type="submit" class="btn btn--success">{{ t.add_table }}</button>
+  </form>
+  {% endif %}
+{% endif %}
+
+<style>
+.credit-banner {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 10px;
+  padding: 12px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  font-size: 16px;
+}
+.tab--credit { color: #e67e22; }
+.tab__badge {
+  background: #e74c3c;
+  color: #fff;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-right: 4px;
+}
+.table-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.table-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  border-right: 5px solid #ccc;
+}
+.table-card--free { border-color: #27ae60; }
+.table-card--occupied { border-color: #e74c3c; background: #fff8f6; }
+.table-card--reserved { border-color: #f39c12; }
+.table-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.table-card__label { font-size: 18px; font-weight: 700; }
+.table-card__total { font-size: 16px; font-weight: 700; color: #e74c3c; }
+.table-card__status { font-size: 14px; color: #666; margin-bottom: 8px; }
+.table-card__status small { display: block; font-size: 12px; color: #999; }
+.table-card__actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.table-move { margin-top: 4px; }
+.empty-msg { text-align: center; padding: 40px; font-size: 18px; color: #999; }
+</style>
+{% endblock %}

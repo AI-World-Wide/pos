@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import func, case
 
 from src.database import SessionLocal
-from src.models import Category, Item, Order, OrderLine
+from src.models import Area, Category, FloorTable, Item, Order, OrderLine, Shift
 
 
 def _date_range(period: str) -> tuple[datetime, datetime]:
@@ -156,6 +156,133 @@ def get_sales_by_cashier(period: str = "today") -> list[dict]:
             {"cashier": r[0] or "—", "count": int(r[1]), "revenue": round(float(r[2]), 2)}
             for r in rows
         ]
+    finally:
+        db.close()
+
+
+def get_payment_breakdown(period: str = "today") -> dict:
+    """Cash vs card vs credit breakdown."""
+    start, end = _date_range(period)
+    db = SessionLocal()
+    try:
+        orders = (
+            db.query(Order)
+            .filter(Order.status == "settled", Order.closed_at.between(start, end))
+            .all()
+        )
+        cash = sum(o.total for o in orders if o.payment_method == "cash")
+        card = sum(o.total for o in orders if o.payment_method == "card")
+        return {
+            "cash": round(cash, 2),
+            "card": round(card, 2),
+            "cash_count": sum(1 for o in orders if o.payment_method == "cash"),
+            "card_count": sum(1 for o in orders if o.payment_method == "card"),
+        }
+    finally:
+        db.close()
+
+
+def get_avg_items_per_order(period: str = "today") -> float:
+    start, end = _date_range(period)
+    db = SessionLocal()
+    try:
+        orders = (
+            db.query(Order)
+            .filter(Order.status == "settled", Order.closed_at.between(start, end))
+            .all()
+        )
+        if not orders:
+            return 0
+        total_items = 0
+        for o in orders:
+            total_items += sum(l.quantity for l in o.lines if not l.voided)
+        return round(total_items / len(orders), 1)
+    finally:
+        db.close()
+
+
+def get_peak_hour(period: str = "today") -> dict | None:
+    by_hour = get_sales_by_hour(period)
+    if not by_hour:
+        return None
+    peak = max(by_hour, key=lambda h: h["revenue"])
+    slowest = min(by_hour, key=lambda h: h["revenue"])
+    return {"peak": peak, "slowest": slowest}
+
+
+def get_credit_summary() -> dict:
+    """Total unpaid credit across all credit-area tables."""
+    db = SessionLocal()
+    try:
+        credit_area = db.query(Area).filter(Area.is_credit == True).first()
+        if not credit_area:
+            return {"total": 0, "count": 0, "tables": []}
+        tables = (
+            db.query(FloorTable)
+            .filter(FloorTable.area_id == credit_area.id, FloorTable.status == "occupied")
+            .all()
+        )
+        total = 0
+        details = []
+        for t in tables:
+            if t.current_order_id:
+                o = db.get(Order, t.current_order_id)
+                if o and o.status in ("open", "sent"):
+                    total += o.total or 0
+                    details.append({
+                        "label": t.label_ar,
+                        "total": round(o.total or 0, 2),
+                        "order_number": o.order_number,
+                        "created": o.created_at.strftime("%d/%m %H:%M") if o.created_at else "",
+                    })
+        return {"total": round(total, 2), "count": len(details), "tables": details}
+    finally:
+        db.close()
+
+
+def get_daily_trend(days: int = 7) -> list[dict]:
+    """Revenue per day for the last N days."""
+    db = SessionLocal()
+    try:
+        result = []
+        today = date.today()
+        for i in range(days - 1, -1, -1):
+            d = today - timedelta(days=i)
+            start = datetime(d.year, d.month, d.day)
+            end = datetime(d.year, d.month, d.day, 23, 59, 59)
+            orders = (
+                db.query(Order)
+                .filter(Order.status == "settled", Order.closed_at.between(start, end))
+                .all()
+            )
+            revenue = sum(o.total for o in orders)
+            result.append({
+                "date": d.strftime("%d/%m"),
+                "day_name": d.strftime("%A"),
+                "revenue": round(revenue, 2),
+                "orders": len(orders),
+            })
+        return result
+    finally:
+        db.close()
+
+
+def get_current_shift_stats() -> dict | None:
+    """Live stats for the currently open shift."""
+    db = SessionLocal()
+    try:
+        shift = db.query(Shift).filter(Shift.status == "open").order_by(Shift.opened_at.desc()).first()
+        if not shift:
+            return None
+        orders = db.query(Order).filter(Order.shift_id == shift.id, Order.status == "settled").all()
+        return {
+            "shift_id": shift.id,
+            "opened_at": shift.opened_at.strftime("%d/%m/%Y %I:%M %p"),
+            "total_sales": round(sum(o.total for o in orders), 2),
+            "total_vat": round(sum(o.vat_amount for o in orders), 2),
+            "order_count": len(orders),
+            "opening_cash": shift.opening_cash,
+        }
     finally:
         db.close()
 

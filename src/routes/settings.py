@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Settings routes — cafe info, printers, users, permissions, SMTP."""
+"""Settings routes — cafe info, printers, users, permissions, Gmail OAuth2 email."""
 from __future__ import annotations
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
@@ -13,11 +13,21 @@ from src.seed_users import PERMISSION_KEYS
 bp = Blueprint("settings", __name__, url_prefix="/settings")
 
 SETTING_KEYS = [
-    "cafe_name_ar", "trn", "vat_rate",
-    "smtp_host", "smtp_port", "smtp_username", "smtp_password",
-    "smtp_use_tls", "smtp_from", "smtp_to",
-    "kick_code",
+    "cafe_name_ar", "trn", "vat_rate", "kick_code",
 ]
+
+EMAIL_SETTING_KEYS = [
+    "gmail_client_id", "gmail_client_secret", "gmail_sender_email",
+    "email_recipients",
+    "report_on_close", "report_daily",
+    "include_sales_summary", "include_top_items", "include_category_breakdown",
+    "include_cashier_breakdown", "include_hourly_breakdown", "include_credit_summary",
+]
+
+
+def _get_setting(db, key, fallback=""):
+    s = db.query(Setting).filter(Setting.key == key).first()
+    return s.value if s and s.value else fallback
 
 
 @bp.before_request
@@ -34,7 +44,6 @@ def index():
         printers_db = db.query(Printer).order_by(Printer.name).all()
         users = db.query(User).order_by(User.id).all()
 
-        # Merge config.ini defaults with DB settings
         import configparser
         from pathlib import Path
         cfg = configparser.ConfigParser()
@@ -45,21 +54,16 @@ def index():
             "trn": cfg.get("cafe", "trn", fallback=""),
             "vat_rate": cfg.get("vat", "rate", fallback="0.05"),
             "kick_code": cfg.get("printer", "kick_code", fallback="27,112,0,25,250"),
-            "smtp_host": cfg.get("smtp", "host", fallback=""),
-            "smtp_port": cfg.get("smtp", "port", fallback="587"),
-            "smtp_username": cfg.get("smtp", "username", fallback=""),
-            "smtp_password": cfg.get("smtp", "password", fallback=""),
-            "smtp_from": cfg.get("smtp", "from_address", fallback=""),
-            "smtp_to": cfg.get("smtp", "to_address", fallback=""),
         }
         for k, v in defaults.items():
             if k not in settings:
                 settings[k] = v
 
-        # Discover Windows printers
+        # Gmail OAuth status
+        gmail_connected = bool(settings.get("gmail_refresh_token"))
+
         discovered = discover_printers()
 
-        # Permission matrix
         all_perms = {}
         for p in db.query(Permission).all():
             all_perms.setdefault(p.role, {})[p.permission_key] = p.granted
@@ -70,7 +74,8 @@ def index():
                                discovered=discovered,
                                users=users,
                                all_perms=all_perms,
-                               perm_keys=PERMISSION_KEYS)
+                               perm_keys=PERMISSION_KEYS,
+                               gmail_connected=gmail_connected)
     finally:
         db.close()
 
@@ -91,6 +96,85 @@ def save_settings():
         return redirect(url_for("settings.index"))
     finally:
         db.close()
+
+
+@bp.post("/email/save")
+def save_email_settings():
+    db = get_session()
+    try:
+        for key in EMAIL_SETTING_KEYS:
+            if key.startswith("include_") or key in ("report_on_close", "report_daily"):
+                val = "1" if request.form.get(key) else "0"
+            else:
+                val = request.form.get(key, "").strip()
+            existing = db.query(Setting).filter(Setting.key == key).first()
+            if existing:
+                existing.value = val
+            else:
+                db.add(Setting(key=key, value=val))
+        db.commit()
+        flash("settings_saved", "success")
+        return redirect(url_for("settings.index"))
+    finally:
+        db.close()
+
+
+@bp.get("/oauth-start")
+def oauth_start():
+    """Redirect to Google OAuth2 consent screen."""
+    from src.email_report import get_oauth_url
+    redirect_uri = url_for("settings.oauth_callback", _external=True)
+    auth_url = get_oauth_url(redirect_uri)
+    if not auth_url:
+        flash("Gmail client ID not configured", "error")
+        return redirect(url_for("settings.index"))
+    return redirect(auth_url)
+
+
+@bp.get("/oauth-callback")
+def oauth_callback():
+    """Handle Google OAuth2 callback."""
+    code = request.args.get("code")
+    error = request.args.get("error")
+    if error or not code:
+        flash(f"OAuth error: {error or 'no code'}", "error")
+        return redirect(url_for("settings.index"))
+
+    from src.email_report import exchange_code_for_tokens
+    redirect_uri = url_for("settings.oauth_callback", _external=True)
+    try:
+        tokens = exchange_code_for_tokens(code, redirect_uri)
+        if "access_token" in tokens:
+            flash("email_connected", "success")
+        else:
+            flash(f"Token error: {tokens.get('error', 'unknown')}", "error")
+    except Exception as e:
+        flash(f"OAuth failed: {e}", "error")
+
+    return redirect(url_for("settings.index"))
+
+
+@bp.post("/oauth-disconnect")
+def oauth_disconnect():
+    db = get_session()
+    try:
+        for key in ["gmail_access_token", "gmail_refresh_token"]:
+            s = db.query(Setting).filter(Setting.key == key).first()
+            if s:
+                s.value = ""
+        db.commit()
+        flash("Gmail disconnected", "success")
+        return redirect(url_for("settings.index"))
+    finally:
+        db.close()
+
+
+@bp.post("/email/test")
+def test_email():
+    from src.email_report import send_daily_report
+    result = send_daily_report()
+    flash(result, "success" if "success" in result.lower() else "error")
+    return redirect(url_for("settings.index"))
 
 
 @bp.post("/printers/add")
@@ -135,11 +219,8 @@ def add_user():
         pin = request.form.get("pin", "0000")
         if username and name_ar:
             db.add(User(
-                username=username,
-                name_ar=name_ar,
-                role=role,
-                pin_hash=generate_password_hash(pin),
-                active=True,
+                username=username, name_ar=name_ar, role=role,
+                pin_hash=generate_password_hash(pin), active=True,
             ))
             db.commit()
         return redirect(url_for("settings.index"))
@@ -191,32 +272,17 @@ def save_permissions():
 
 @bp.post("/test-print")
 def test_print():
-    """Send a test receipt to the configured printer."""
     try:
         from src.printer import _get_printer_name, _send_raw_to_printer, _build_cut_command
         printer_name = _get_printer_name("receipt")
         if not printer_name:
             flash("No printer configured", "error")
             return redirect(url_for("settings.index"))
-
-        # Simple test: ESC @ + some text + cut
-        data = b'\x1b\x40'  # init
-        data += b'\x1b\x61\x01'  # center align
-        data += "Cafe POS Test Print\n".encode("cp437", errors="replace")
-        data += "Arabic test: OK\n".encode("cp437", errors="replace")
-        data += b'\n\n'
+        data = b'\x1b\x40\x1b\x61\x01'
+        data += "Cafe POS Test Print\n\nOK\n\n\n".encode("cp437", errors="replace")
         data += _build_cut_command()
         _send_raw_to_printer(printer_name, data)
         flash("Test print sent", "success")
     except Exception as e:
         flash(f"Print error: {e}", "error")
-    return redirect(url_for("settings.index"))
-
-
-@bp.post("/test-email")
-def test_email():
-    """Send a test daily report email."""
-    from src.email_report import send_daily_report
-    result = send_daily_report()
-    flash(result, "success" if "success" in result.lower() else "error")
     return redirect(url_for("settings.index"))

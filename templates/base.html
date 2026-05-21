@@ -18,6 +18,10 @@
         <span class="topbar__user">{{ session.get('name_ar', '') }}</span>
       {% endif %}
       <a class="topbar__link" href="{{ url_for('cashier.index') }}">{{ t.home }}</a>
+      <a class="topbar__link" href="{{ url_for('tables.floor_plan') }}">{{ t.tables }}</a>
+      {% if session.get('role') == 'admin' %}
+        <a class="topbar__link" href="{{ url_for('shift.index') }}">{{ t.shift }}</a>
+      {% endif %}
       {% if session.get('role') == 'admin' or session.get('can_view_reports') %}
         <a class="topbar__link" href="{{ url_for('reports.index') }}">{{ t.reports }}</a>
       {% endif %}

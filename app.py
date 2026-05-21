@@ -19,6 +19,8 @@ from src.routes.backoffice import bp as backoffice_bp
 from src.routes.cashier import bp as cashier_bp
 from src.routes.reports import bp as reports_bp
 from src.routes.settings import bp as settings_bp
+from src.routes.tables import bp as tables_bp
+from src.routes.shift import bp as shift_bp
 from src.translations.ar import T
 
 # PyInstaller sets _MEIPASS for bundled assets (templates, static, config).
@@ -77,6 +79,8 @@ def create_app() -> Flask:
     app.register_blueprint(backoffice_bp)
     app.register_blueprint(reports_bp)
     app.register_blueprint(settings_bp)
+    app.register_blueprint(tables_bp)
+    app.register_blueprint(shift_bp)
 
     # Login guard: redirect to login if not authenticated
     @app.before_request

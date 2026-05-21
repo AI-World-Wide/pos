@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="page-title">{{ t.split_items }} — {{ table.label_ar }}</h1>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+  <!-- Select items to split -->
+  <div class="card">
+    <h2 style="font-size:18px;margin-bottom:12px">{{ t.select_items }}</h2>
+    <form method="post" action="{{ url_for('tables.split_execute', table_id=table.id) }}" id="split-form">
+      {% for l in lines %}
+        <label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #eee;cursor:pointer">
+          <input type="checkbox" name="line_ids" value="{{ l.id }}" class="split-check"
+                 onchange="updateSplitTotal()">
+          <span style="flex:1;font-size:16px;font-weight:600">{{ l.name_ar }}</span>
+          <span style="font-size:14px;color:#666">×{{ l.qty }}</span>
+          <span style="font-size:16px;font-weight:700">{{ t.currency }} {{ "%.2f"|format(l.line_total) }}</span>
+        </label>
+      {% endfor %}
+
+      <div style="margin-top:14px;padding:12px;background:#faf8f4;border-radius:8px;display:flex;justify-content:space-between">
+        <span style="font-weight:700">{{ t.selected_items }}</span>
+        <span id="split-total" style="font-weight:700">{{ t.currency }} 0.00</span>
+      </div>
+
+      <!-- Action: split to table or partial pay -->
+      <h3 style="font-size:16px;margin:18px 0 8px">{{ t.split_to_table }}</h3>
+      <select name="target_table_id" class="form-select" style="margin-bottom:12px">
+        <option value="">— {{ t.split_to_table }} —</option>
+        {% for ft in targets %}
+          <option value="{{ ft.id }}">{{ ft.area }} — {{ ft.label }}</option>
+        {% endfor %}
+      </select>
+
+      <div style="display:flex;gap:10px">
+        <input type="hidden" name="action" id="split-action" value="split">
+        <button type="submit" class="btn btn--primary" onclick="document.getElementById('split-action').value='split'">
+          {{ t.confirm_split }}
+        </button>
+        <button type="submit" class="btn btn--success" onclick="document.getElementById('split-action').value='partial_pay'">
+          {{ t.partial_pay }}
+        </button>
+        <a href="{{ url_for('tables.floor_plan') }}" class="btn btn--secondary">{{ t.cancel }}</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Preview -->
+  <div class="card">
+    <h2 style="font-size:18px;margin-bottom:12px">{{ order.order_number }}</h2>
+    <p style="color:#666">{{ t.select_items }}</p>
+  </div>
+</div>
+
+<script>
+var prices = {
+  {% for l in lines %}"{{ l.id }}": {{ l.line_total }},{% endfor %}
+};
+function updateSplitTotal() {
+  var total = 0;
+  document.querySelectorAll('.split-check:checked').forEach(function(cb) {
+    total += prices[cb.value] || 0;
+  });
+  document.getElementById('split-total').textContent = 'AED ' + total.toFixed(2);
+}
+</script>
+{% endblock %}

@@ -65,12 +65,13 @@ def get_session() -> Session:
 
 
 def init_db() -> None:
-    """Create all tables if they don't exist, then seed users + permissions."""
-    # Local import avoids circular import at module load time.
+    """Create all tables if they don't exist, then seed users + permissions + areas."""
     from src.models import Base
     from src.seed_users import seed_users_and_permissions
+    from src.seed_tables import seed_areas_and_tables
 
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as session:
         seed_users_and_permissions(session)
+        seed_areas_and_tables(session)
         session.commit()

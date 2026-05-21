@@ -13,6 +13,10 @@
     {% endif %}
   </div>
   <nav class="pos-topbar__nav">
+    <a class="pos-topbar__btn pos-topbar__btn--tables" href="{{ url_for('tables.floor_plan') }}">{{ t.tables }}</a>
+    {% if session.get('role') == 'admin' %}
+      <a class="pos-topbar__btn" href="{{ url_for('shift.index') }}">{{ t.shift }}</a>
+    {% endif %}
     {% if session.get('role') == 'admin' or session.get('can_view_reports') %}
       <a class="pos-topbar__btn" href="{{ url_for('reports.index') }}">{{ t.reports }}</a>
     {% endif %}

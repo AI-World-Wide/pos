@@ -30,6 +30,8 @@
   transition: background 0.1s;
 }
 .pos-topbar__btn:hover { background: #3d3d5c; }
+.pos-topbar__btn--tables { background: #2980b9; }
+.pos-topbar__btn--tables:hover { background: #3498db; }
 .pos-topbar__btn--settings { background: #b8954a; }
 .pos-topbar__btn--settings:hover { background: #d4ac5e; }
 .pos-topbar__btn--logout { background: #c0392b; }

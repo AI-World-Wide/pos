@@ -61,11 +61,59 @@ class Item(Base):
     category = relationship("Category", back_populates="items")
 
 
+class Area(Base):
+    __tablename__ = "areas"
+
+    id = Column(Integer, primary_key=True)
+    name_ar = Column(String, nullable=False)
+    name_en = Column(String, nullable=False, unique=True)
+    sort_order = Column(Integer, default=0)
+    is_credit = Column(Boolean, default=False)  # special Credit area for unpaid
+    visible = Column(Boolean, default=True)
+
+    tables = relationship("FloorTable", back_populates="area", cascade="all, delete-orphan")
+
+
+class FloorTable(Base):
+    __tablename__ = "floor_tables"
+
+    id = Column(Integer, primary_key=True)
+    area_id = Column(Integer, ForeignKey("areas.id"), nullable=False)
+    number = Column(Integer, nullable=False)  # table number within area
+    label_ar = Column(String)  # display label, e.g. "طاولة 5" or "كابينة 3"
+    capacity = Column(Integer, default=4)
+    status = Column(String, default="free")  # free / occupied / reserved
+    current_order_id = Column(Integer, ForeignKey("orders.id"), nullable=True)
+    visible = Column(Boolean, default=True)
+
+    area = relationship("Area", back_populates="tables")
+    current_order = relationship("Order", foreign_keys=[current_order_id])
+
+
+class Shift(Base):
+    __tablename__ = "shifts"
+
+    id = Column(Integer, primary_key=True)
+    opened_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    closed_at = Column(DateTime, nullable=True)
+    opened_by = Column(String)  # username
+    closed_by = Column(String)
+    opening_cash = Column(Float, default=0)
+    closing_cash = Column(Float, default=0)
+    total_sales = Column(Float, default=0)
+    total_orders = Column(Integer, default=0)
+    total_vat = Column(Float, default=0)
+    notes = Column(Text)
+    status = Column(String, default="open")  # open / closed
+
+
 class Order(Base):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True)
     order_number = Column(String, unique=True)  # e.g. 2026-05-20-0001
+    table_id = Column(Integer, ForeignKey("floor_tables.id"), nullable=True)
+    shift_id = Column(Integer, ForeignKey("shifts.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     closed_at = Column(DateTime)
     status = Column(String, default="open")  # open / sent / settled / voided
@@ -78,6 +126,7 @@ class Order(Base):
     cashier = Column(String)  # username from users table
     notes = Column(Text)
 
+    table = relationship("FloorTable", foreign_keys=[table_id])
     lines = relationship("OrderLine", back_populates="order", cascade="all, delete-orphan")
 
 
