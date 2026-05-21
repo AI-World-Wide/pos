@@ -426,6 +426,9 @@ def _get_order_view_data(db, order=None) -> dict:
             "total": 0,
             "status": "open",
             "table_id": None,
+            "table_info": None,
+            "move_targets": [],
+            "opened_at": None,
         }
     lines = [
         {
@@ -438,8 +441,9 @@ def _get_order_view_data(db, order=None) -> dict:
         }
         for l in order.lines if not l.voided
     ]
-    # Gather table info if linked
+    # Gather table info + areas for move dropdown
     table_info = None
+    move_areas = []
     if order.table_id:
         from src.models import FloorTable, Area
         ft = db.get(FloorTable, order.table_id)
@@ -450,6 +454,20 @@ def _get_order_view_data(db, order=None) -> dict:
                 "number": ft.number,
                 "area_name": area.name_ar if area else "",
             }
+            # Free tables in other areas for the move dropdown
+            free = (
+                db.query(FloorTable, Area)
+                .join(Area, Area.id == FloorTable.area_id)
+                .filter(FloorTable.status == "free", FloorTable.visible == True,
+                        FloorTable.id != ft.id)
+                .order_by(Area.sort_order, FloorTable.number)
+                .limit(50)
+                .all()
+            )
+            move_areas = [
+                {"table_id": t.id, "label": f"{a.name_ar} - {t.number}"}
+                for t, a in free
+            ]
 
     return {
         "id": order.id,
@@ -461,5 +479,6 @@ def _get_order_view_data(db, order=None) -> dict:
         "status": order.status,
         "table_id": order.table_id,
         "table_info": table_info,
+        "move_targets": move_areas,
         "opened_at": order.created_at.isoformat() if order.created_at else None,
     }

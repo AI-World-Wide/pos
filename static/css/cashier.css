@@ -261,6 +261,19 @@
   font-size: 14px;
 }
 
+.move-dropdown { flex: 1; }
+.move-select {
+  height: 36px;
+  border: 1px solid #556;
+  border-radius: 6px;
+  background: #2d2d4a;
+  color: #fff;
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px;
+  padding: 0 8px;
+  width: 100%;
+}
+
 /* --- Action bar --- */
 .order-actions {
   display: grid;

@@ -1,6 +1,6 @@
 <div class="order-head">
   {% if order.table_info %}
-    <span class="order-title">{{ order.table_info.area_name }} — {{ order.table_info.number }}</span>
+    <span class="order-title">{{ order.table_info.area_name }} - {{ order.table_info.number }}</span>
   {% else %}
     <span class="order-title">{{ t.current_order }}</span>
   {% endif %}
@@ -12,7 +12,7 @@
 {% if order.opened_at %}
 <div class="order-timer" data-opened="{{ order.opened_at }}">
   <span class="order-timer__icon">⏱</span>
-  <span class="order-timer__value">00:00</span>
+  <span class="order-timer__value">00:00:00</span>
 </div>
 {% endif %}
 
@@ -81,6 +81,18 @@
 <div class="order-table-actions">
   <a href="{{ url_for('tables.floor_plan') }}" class="action-btn action-btn--held" style="text-decoration:none">{{ t.tables }}</a>
   <a href="{{ url_for('tables.split_form', table_id=order.table_id) }}" class="action-btn action-btn--hold" style="text-decoration:none">{{ t.split_items }}</a>
+  {% if order.move_targets %}
+  <div class="move-dropdown" onclick="event.stopPropagation()">
+    <form method="post" action="{{ url_for('tables.move_table', table_id=order.table_id) }}" style="display:flex;gap:4px">
+      <select name="target_table_id" class="move-select">
+        {% for mt in order.move_targets %}
+          <option value="{{ mt.table_id }}">{{ mt.label }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="action-btn action-btn--send" style="min-height:36px;font-size:13px;padding:0 10px">{{ t.move_to }}</button>
+    </form>
+  </div>
+  {% endif %}
 </div>
 {% endif %}
 

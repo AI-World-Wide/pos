@@ -2,8 +2,6 @@
 """Floor plan / tables routes — area tabs, table grid, split, move, partial pay."""
 from __future__ import annotations
 
-from datetime import datetime
-
 from flask import Blueprint, abort, redirect, render_template, request, session, url_for
 from sqlalchemy import func
 
@@ -117,55 +115,70 @@ def open_table(table_id: int):
 
 @bp.post("/move/<int:table_id>")
 def move_table(table_id: int):
-    """Move a table (its order) to a different area."""
+    """Move a table's order to a specific target table or an area."""
     db = get_session()
     try:
         table = db.get(FloorTable, table_id)
         if not table or not table.current_order_id:
             return redirect(url_for("tables.floor_plan"))
 
+        order = db.get(Order, table.current_order_id)
         target_area_id = request.form.get("target_area_id", type=int)
         target_table_id = request.form.get("target_table_id", type=int)
+        source_area = table.area_id
+
+        def _transfer_to(target_ft):
+            target_ft.current_order_id = table.current_order_id
+            target_ft.status = "occupied"
+            if order:
+                order.table_id = target_ft.id
+            table.current_order_id = None
+            table.status = "free"
 
         if target_table_id:
-            # Move to a specific table
+            # Direct table-to-table transfer (drag-drop or dropdown)
             target = db.get(FloorTable, target_table_id)
             if target and target.status == "free":
-                target.current_order_id = table.current_order_id
-                target.status = "occupied"
-                # Update order's table_id
-                order = db.get(Order, table.current_order_id)
-                if order:
-                    order.table_id = target.id
-                table.current_order_id = None
-                table.status = "free"
+                _transfer_to(target)
                 db.commit()
+
         elif target_area_id:
-            # Move to credit or another area — create a new table slot if needed
             target_area = db.get(Area, target_area_id)
-            if target_area and target_area.is_credit:
-                # For credit: create a dynamic table entry
+            if not target_area:
+                return redirect(url_for("tables.floor_plan", area=source_area))
+
+            if target_area.is_credit:
+                # Credit area: create a dynamic table slot
                 max_num = db.query(func.max(FloorTable.number)).filter(
                     FloorTable.area_id == target_area.id
                 ).scalar() or 0
                 new_table = FloorTable(
                     area_id=target_area.id,
                     number=max_num + 1,
-                    label_ar=f"{table.label_ar} → آجل",
+                    label_ar=str(max_num + 1),
                     capacity=table.capacity,
-                    status="occupied",
-                    current_order_id=table.current_order_id,
+                    status="free",
+                    visible=True,
                 )
                 db.add(new_table)
                 db.flush()
-                order = db.get(Order, table.current_order_id)
-                if order:
-                    order.table_id = new_table.id
-                table.current_order_id = None
-                table.status = "free"
+                _transfer_to(new_table)
                 db.commit()
+            else:
+                # Non-credit area: find first free table in that area
+                free_target = (
+                    db.query(FloorTable)
+                    .filter(FloorTable.area_id == target_area.id,
+                            FloorTable.status == "free",
+                            FloorTable.visible == True)
+                    .order_by(FloorTable.number)
+                    .first()
+                )
+                if free_target:
+                    _transfer_to(free_target)
+                    db.commit()
 
-        return redirect(url_for("tables.floor_plan", area=table.area_id))
+        return redirect(url_for("tables.floor_plan", area=source_area))
     finally:
         db.close()
 
@@ -206,7 +219,7 @@ def split_form(table_id: int):
 
 @bp.post("/split/<int:table_id>")
 def split_execute(table_id: int):
-    """Execute split: move selected lines to a new order on target table."""
+    """Execute split: move selected lines to a target table, or go to payment."""
     db = get_session()
     try:
         table = db.get(FloorTable, table_id)
@@ -216,55 +229,60 @@ def split_execute(table_id: int):
         source_order = db.get(Order, table.current_order_id)
         target_table_id = request.form.get("target_table_id", type=int)
         line_ids = request.form.getlist("line_ids", type=int)
-        action = request.form.get("action", "split")  # split or partial_pay
+        action = request.form.get("action", "split")
 
-        if action == "partial_pay" and line_ids:
-            # Pay for selected items only
-            selected_total = sum(
-                l.line_total for l in source_order.lines
-                if l.id in line_ids and not l.voided
-            )
-            # Mark them as a separate settled micro-order
-            from src.routes.cashier import _current_order_number, _calc_totals
+        if not line_ids:
+            return redirect(url_for("tables.split_form", table_id=table_id))
+
+        from src.routes.cashier import _current_order_number, _calc_totals
+
+        if action == "partial_pay":
+            # Create a new order with the selected items, then redirect to
+            # the cashier payment flow so the user sees the payment modal.
             partial_order = Order(
                 order_number=_current_order_number(),
-                status="settled",
+                status="open",
                 table_id=table.id,
                 cashier=session.get("username", "admin"),
-                payment_method=request.form.get("method", "cash"),
-                closed_at=datetime.utcnow(),
             )
             db.add(partial_order)
             db.flush()
 
-            for l in source_order.lines:
-                if l.id in line_ids and not l.voided:
-                    l.order_id = partial_order.id
-            _calc_totals(partial_order)
-            partial_order.cash_received = partial_order.total
-            partial_order.change_due = 0
+            # Move selected lines to the partial order
+            db.query(OrderLine).filter(
+                OrderLine.id.in_(line_ids), OrderLine.voided == 0
+            ).update({"order_id": partial_order.id}, synchronize_session="fetch")
 
-            # Recalc source
-            _calc_totals(source_order)
-            # If source has no more active lines, free the table
-            active = [l for l in source_order.lines if not l.voided]
-            if not active:
+            _calc_totals(partial_order)
+
+            # Recalc source (re-query to get fresh line list)
+            remaining = db.query(OrderLine).filter(
+                OrderLine.order_id == source_order.id, OrderLine.voided == 0
+            ).all()
+            source_order.total = round(sum(l.line_total for l in remaining), 2)
+            source_order.subtotal = round(source_order.total / 1.05, 2)
+            source_order.vat_amount = round(source_order.total - source_order.subtotal, 2)
+
+            if not remaining:
                 source_order.status = "voided"
                 table.current_order_id = None
                 table.status = "free"
 
             db.commit()
-            return redirect(url_for("tables.floor_plan", area=table.area_id))
 
-        if not target_table_id or not line_ids:
+            # Set the partial order as the active one and go to cashier pay
+            session["current_order_id"] = partial_order.id
+            return redirect(url_for("cashier.index"))
+
+        # --- Split to another table ---
+        if not target_table_id:
             return redirect(url_for("tables.split_form", table_id=table_id))
 
         target_table = db.get(FloorTable, target_table_id)
-        if not target_table:
-            return redirect(url_for("tables.floor_plan"))
+        if not target_table or target_table.status != "free":
+            return redirect(url_for("tables.split_form", table_id=table_id))
 
-        # Create new order for the target table
-        from src.routes.cashier import _current_order_number, _calc_totals
+        # Create new order on target table
         new_order = Order(
             order_number=_current_order_number(),
             status="open",
@@ -274,20 +292,25 @@ def split_execute(table_id: int):
         db.add(new_order)
         db.flush()
 
-        # Move selected lines to new order
-        for l in source_order.lines:
-            if l.id in line_ids and not l.voided:
-                l.order_id = new_order.id
+        # Move selected lines (bulk update avoids stale relationship)
+        db.query(OrderLine).filter(
+            OrderLine.id.in_(line_ids), OrderLine.voided == 0
+        ).update({"order_id": new_order.id}, synchronize_session="fetch")
 
         _calc_totals(new_order)
-        _calc_totals(source_order)
+
+        # Recalc source with fresh data
+        remaining = db.query(OrderLine).filter(
+            OrderLine.order_id == source_order.id, OrderLine.voided == 0
+        ).all()
+        source_order.total = round(sum(l.line_total for l in remaining), 2)
+        source_order.subtotal = round(source_order.total / 1.05, 2)
+        source_order.vat_amount = round(source_order.total - source_order.subtotal, 2)
 
         target_table.current_order_id = new_order.id
         target_table.status = "occupied"
 
-        # If source has no more active lines, free the source table
-        active = [l for l in source_order.lines if not l.voided]
-        if not active:
+        if not remaining:
             source_order.status = "voided"
             table.current_order_id = None
             table.status = "free"
