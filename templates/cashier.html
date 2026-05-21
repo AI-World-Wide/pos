@@ -4,6 +4,28 @@
 {% endblock %}
 
 {% block body %}
+<!-- Top navigation bar -->
+<header class="pos-topbar">
+  <div class="pos-topbar__right">
+    <span class="pos-topbar__title">{{ t.app_title }}</span>
+    {% if session.get('name_ar') %}
+      <span class="pos-topbar__user">{{ session.get('name_ar') }}</span>
+    {% endif %}
+  </div>
+  <nav class="pos-topbar__nav">
+    {% if session.get('role') == 'admin' or session.get('can_view_reports') %}
+      <a class="pos-topbar__btn" href="{{ url_for('reports.index') }}">{{ t.reports }}</a>
+    {% endif %}
+    {% if session.get('role') == 'admin' %}
+      <a class="pos-topbar__btn" href="{{ url_for('backoffice.items_list') }}">{{ t.item_management }}</a>
+      <a class="pos-topbar__btn pos-topbar__btn--settings" href="{{ url_for('settings.index') }}">{{ t.settings }}</a>
+    {% endif %}
+    {% if session.get('username') %}
+      <a class="pos-topbar__btn pos-topbar__btn--logout" href="{{ url_for('auth.logout') }}">{{ t.logout }}</a>
+    {% endif %}
+  </nav>
+</header>
+
 <div class="pos">
   <!-- RIGHT PANEL: Categories -->
   <aside class="pos__categories">
