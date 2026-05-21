@@ -48,7 +48,8 @@
       "Bash(.venv/Scripts/python.exe -m PyInstaller --noconfirm --onefile --name cafe_pos --console --add-data 'templates;templates' --add-data 'static;static' --add-data 'config.ini;.' --add-data 'data/seed;data/seed' --hidden-import=src --hidden-import=src.database --hidden-import=src.models --hidden-import=src.printer --hidden-import=src.receipt --hidden-import=src.kitchen_ticket --hidden-import=src.reports --hidden-import=src.email_report --hidden-import=src.seed_users --hidden-import=src.seed_tables --hidden-import=src.translations --hidden-import=src.translations.ar --hidden-import=src.routes --hidden-import=src.routes.auth --hidden-import=src.routes.cashier --hidden-import=src.routes.backoffice --hidden-import=src.routes.reports --hidden-import=src.routes.settings --hidden-import=src.routes.tables --hidden-import=src.routes.shift --hidden-import=win32print --hidden-import=win32api app.py)"
     ],
     "additionalDirectories": [
-      "D:\\POS_TEST"
+      "D:\\POS_TEST",
+      "D:\\POS_TEST\\data"
     ]
   }
 }

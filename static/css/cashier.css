@@ -137,6 +137,20 @@
 .order-title { font-size: 20px; font-weight: 700; }
 .order-num { font-size: 14px; color: #b8954a; }
 
+/* Timer bar */
+.order-timer {
+  background: #34495e;
+  color: #ecf0f1;
+  padding: 6px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.order-timer__icon { font-size: 16px; }
+.order-timer__value { font-family: monospace; font-size: 16px; }
+
 .order-lines {
   flex: 1;
   overflow-y: auto;
@@ -194,6 +208,23 @@
   font-size: 18px;
   color: #999;
 }
+
+/* Inline price edit (admin) */
+.inline-price-form { display: inline; }
+.price-edit-input {
+  width: 70px;
+  height: 28px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: 'Cairo', sans-serif;
+  background: #fff;
+  direction: ltr;
+}
+.price-edit-input:focus { border-color: #b8954a; outline: none; }
+.line-subtotal { color: #999; font-size: 12px; margin-right: 4px; }
 
 /* --- Totals --- */
 .order-totals {

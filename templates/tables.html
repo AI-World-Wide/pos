@@ -2,7 +2,6 @@
 {% block content %}
 <h1 class="page-title">{{ t.floor_plan }}</h1>
 
-<!-- Credit area banner if viewing any area -->
 {% if credit_stats.count > 0 %}
 <div class="credit-banner">
   <span>{{ t.credit_area }}: <strong>{{ credit_stats.count }}</strong> {{ t.credit_tables }}</span>
@@ -10,7 +9,6 @@
 </div>
 {% endif %}
 
-<!-- Area tabs -->
 <div class="tabs">
   {% for a in areas %}
     <a class="tab {% if current_area and current_area.id == a.id %}tab--active{% endif %}
@@ -32,10 +30,18 @@
 </div>
 
 {% if current_area %}
-  <!-- Table grid -->
-  <div class="table-grid">
+  <div class="table-grid" id="table-grid">
     {% for t_ in tables %}
-      <div class="table-card table-card--{{ t_.status }}">
+      <div class="table-card table-card--{{ t_.status }}"
+           data-table-id="{{ t_.id }}"
+           data-status="{{ t_.status }}"
+           draggable="{% if t_.status == 'occupied' %}true{% else %}false{% endif %}"
+           ondragstart="dragStart(event, {{ t_.id }})"
+           ondragover="event.preventDefault();this.classList.add('table-card--dragover')"
+           ondragleave="this.classList.remove('table-card--dragover')"
+           ondrop="dropTable(event, {{ t_.id }})"
+           onclick="{% if t_.status == 'occupied' %}window.location='{{ url_for('tables.open_table', table_id=t_.id) }}'{% elif t_.status == 'free' %}document.getElementById('open-form-{{ t_.id }}').submit(){% endif %}">
+
         <div class="table-card__header">
           <span class="table-card__label">{{ t_.number }}</span>
           {% if t_.status == 'occupied' %}
@@ -43,47 +49,32 @@
           {% endif %}
         </div>
 
+        {% if t_.status == 'occupied' and t_.opened_at %}
+          <div class="table-card__timer" data-opened="{{ t_.opened_at }}">⏱ <span>--:--</span></div>
+        {% endif %}
+
         <div class="table-card__status">
           {% if t_.status == 'free' %}
             {{ t.table_status_free }}
           {% elif t_.status == 'occupied' %}
             {{ t.table_status_occupied }}
-            {% if t_.order_number %}<small>{{ t_.order_number }}</small>{% endif %}
           {% endif %}
         </div>
 
-        <div class="table-card__actions">
-          {% if t_.status == 'free' %}
-            <form method="post" action="{{ url_for('tables.open_table', table_id=t_.id) }}">
-              <button type="submit" class="btn btn--success btn--sm">{{ t.open_table }}</button>
-            </form>
-          {% elif t_.status == 'occupied' %}
-            <form method="post" action="{{ url_for('tables.open_table', table_id=t_.id) }}" style="display:inline">
-              <button type="submit" class="btn btn--primary btn--sm">{{ t.items }}</button>
-            </form>
-            <a href="{{ url_for('tables.split_form', table_id=t_.id) }}" class="btn btn--secondary btn--sm">{{ t.split_items }}</a>
+        <!-- Hidden form for opening free tables (whole card is clickable) -->
+        {% if t_.status == 'free' %}
+          <form id="open-form-{{ t_.id }}" method="get"
+                action="{{ url_for('tables.open_table', table_id=t_.id) }}"
+                onclick="event.stopPropagation()"></form>
+        {% endif %}
 
-            <!-- Move dropdown -->
-            <div class="table-move">
-              <form method="post" action="{{ url_for('tables.move_table', table_id=t_.id) }}" style="display:flex;gap:4px">
-                <select name="target_area_id" class="form-select" style="height:30px;width:auto;font-size:12px">
-                  {% for a in all_areas %}
-                    {% if a.id != current_area.id %}
-                      <option value="{{ a.id }}">{{ a.name_ar }}</option>
-                    {% endif %}
-                  {% endfor %}
-                </select>
-                <button type="submit" class="btn btn--secondary btn--sm" style="font-size:11px">{{ t.move_to }}</button>
-              </form>
-            </div>
-          {% endif %}
-
-          {% if session.get('role') == 'admin' and t_.status == 'free' %}
+        {% if session.get('role') == 'admin' and t_.status == 'free' %}
+          <div class="table-card__admin" onclick="event.stopPropagation()">
             <form method="post" action="{{ url_for('tables.delete_table', table_id=t_.id) }}" style="display:inline">
               <button type="submit" class="btn btn--danger btn--sm" onclick="return confirm('?')">×</button>
             </form>
-          {% endif %}
-        </div>
+          </div>
+        {% endif %}
       </div>
     {% endfor %}
 
@@ -100,6 +91,11 @@
   </form>
   {% endif %}
 {% endif %}
+
+<!-- Hidden form for drag-and-drop transfer -->
+<form id="transfer-form" method="post" action="" style="display:none">
+  <input type="hidden" name="target_table_id" id="transfer-target">
+</form>
 
 <style>
 .credit-banner {
@@ -124,36 +120,96 @@
 }
 .table-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
 }
 .table-card {
   background: #fff;
   border-radius: 12px;
-  padding: 14px;
+  padding: 12px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.06);
   border-right: 5px solid #ccc;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.1s, box-shadow 0.1s;
+  min-height: 100px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
+.table-card:active { transform: scale(0.97); }
 .table-card--free { border-color: #27ae60; background: #f0faf3; }
 .table-card--occupied {
   border-color: #e74c3c;
   background: #fce4e4;
   box-shadow: 0 2px 8px rgba(231,76,60,0.15);
 }
-.table-card--reserved { border-color: #f39c12; background: #fef9e7; }
+.table-card--dragover {
+  outline: 3px dashed #2980b9;
+  background: #ebf5fb !important;
+}
+.table-card[draggable=true] { cursor: grab; }
+.table-card[draggable=true]:active { cursor: grabbing; }
 .table-card__header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
 }
-.table-card__label { font-size: 28px; font-weight: 700; }
+.table-card__label { font-size: 32px; font-weight: 700; }
 .table-card--occupied .table-card__label { color: #c0392b; }
-.table-card__total { font-size: 18px; font-weight: 700; color: #c0392b; }
-.table-card__status { font-size: 14px; color: #666; margin-bottom: 8px; }
-.table-card__status small { display: block; font-size: 12px; color: #999; }
-.table-card__actions { display: flex; flex-wrap: wrap; gap: 4px; }
-.table-move { margin-top: 4px; }
+.table-card__total { font-size: 16px; font-weight: 700; color: #c0392b; }
+.table-card__timer {
+  font-size: 13px;
+  color: #666;
+  font-family: monospace;
+  margin-top: 2px;
+}
+.table-card__status { font-size: 13px; color: #888; margin-top: 4px; }
+.table-card__admin { margin-top: 4px; }
 .empty-msg { text-align: center; padding: 40px; font-size: 18px; color: #999; }
 </style>
+
+<script>
+// --- Live timers on table cards ---
+function updateTimers() {
+  document.querySelectorAll('.table-card__timer').forEach(function(el) {
+    var opened = el.getAttribute('data-opened');
+    if (!opened) return;
+    var start = new Date(opened);
+    var now = new Date();
+    var diff = Math.floor((now - start) / 1000);
+    if (diff < 0) diff = 0;
+    var days = Math.floor(diff / 86400);
+    var hours = Math.floor((diff % 86400) / 3600);
+    var mins = Math.floor((diff % 3600) / 60);
+    var parts = [];
+    if (days > 0) parts.push(days + 'd');
+    parts.push(String(hours).padStart(2, '0') + ':' + String(mins).padStart(2, '0'));
+    el.querySelector('span').textContent = parts.join(' ');
+  });
+}
+updateTimers();
+setInterval(updateTimers, 30000);
+
+// --- Drag and drop table transfer ---
+var dragSourceId = null;
+function dragStart(e, tableId) {
+  dragSourceId = tableId;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', tableId);
+  e.target.style.opacity = '0.5';
+  setTimeout(function() { e.target.style.opacity = '1'; }, 0);
+}
+function dropTable(e, targetId) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('table-card--dragover');
+  if (!dragSourceId || dragSourceId === targetId) return;
+  var targetStatus = e.currentTarget.getAttribute('data-status');
+  if (targetStatus !== 'free') { alert('الطاولة مشغولة'); return; }
+  var form = document.getElementById('transfer-form');
+  form.action = '/tables/move/' + dragSourceId;
+  document.getElementById('transfer-target').value = targetId;
+  form.submit();
+}
+</script>
 {% endblock %}

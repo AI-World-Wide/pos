@@ -27,7 +27,14 @@ def _current_order_number() -> str:
 
 
 def _get_or_create_order(db) -> Order:
-    """Get the active open order or create a new one."""
+    """Get the active open order or create a new one.
+
+    If a pending_table_id is in the session (from the tables view), the new
+    order is linked to that table and the table is marked occupied.  This
+    ensures tables stay 'free' until the first item is actually added.
+    """
+    from src.models import FloorTable
+
     order_id = session.get("current_order_id")
     order = None
     if order_id:
@@ -35,14 +42,23 @@ def _get_or_create_order(db) -> Order:
         if order and order.status not in ("open", "sent"):
             order = None
     if order is None:
+        table_id = session.pop("pending_table_id", None)
         order = Order(
             order_number=_current_order_number(),
             status="open",
+            table_id=table_id,
             cashier=session.get("username", "admin"),
         )
         db.add(order)
         db.flush()
         session["current_order_id"] = order.id
+
+        # Mark the table as occupied now that items will be added
+        if table_id:
+            table = db.get(FloorTable, table_id)
+            if table:
+                table.current_order_id = order.id
+                table.status = "occupied"
     return order
 
 
@@ -155,7 +171,10 @@ def add_to_order(item_id: int):
 
 @bp.post("/order/qty/<int:line_id>/<action>")
 def adjust_qty(line_id: int, action: str):
-    """HTMX: increment, decrement, or void a line."""
+    """HTMX: increment, decrement, or void a line.
+
+    Void/dec are admin-only (checked in template via session role).
+    """
     db = get_session()
     try:
         line = db.get(OrderLine, line_id)
@@ -167,18 +186,45 @@ def adjust_qty(line_id: int, action: str):
             line.quantity += 1
             line.line_total = round(line.quantity * line.unit_price_inclusive, 2)
         elif action == "dec":
-            if line.quantity > 1:
+            if session.get("role") != "admin":
+                pass  # non-admin can't decrease
+            elif line.quantity > 1:
                 line.quantity -= 1
                 line.line_total = round(line.quantity * line.unit_price_inclusive, 2)
             else:
                 line.voided = 1
         elif action == "void":
-            line.voided = 1
+            if session.get("role") == "admin":
+                line.voided = 1
 
         _calc_totals(order)
         db.commit()
         order_data = _get_order_view_data(db, order)
         return render_template("partials/order_panel.html", order=order_data)
+    finally:
+        db.close()
+
+
+@bp.post("/order/edit-price/<int:line_id>")
+def edit_line_price(line_id: int):
+    """HTMX: admin edits the unit price of a single order line."""
+    if session.get("role") != "admin":
+        abort(403)
+    db = get_session()
+    try:
+        line = db.get(OrderLine, line_id)
+        if not line:
+            abort(404)
+        new_price = request.form.get("price", type=float)
+        if new_price is not None and new_price >= 0:
+            line.unit_price_inclusive = round(new_price, 2)
+            line.line_total = round(line.quantity * line.unit_price_inclusive, 2)
+            order = db.get(Order, line.order_id)
+            _calc_totals(order)
+            db.commit()
+            order_data = _get_order_view_data(db, order)
+            return render_template("partials/order_panel.html", order=order_data)
+        abort(400)
     finally:
         db.close()
 
@@ -392,6 +438,19 @@ def _get_order_view_data(db, order=None) -> dict:
         }
         for l in order.lines if not l.voided
     ]
+    # Gather table info if linked
+    table_info = None
+    if order.table_id:
+        from src.models import FloorTable, Area
+        ft = db.get(FloorTable, order.table_id)
+        if ft:
+            area = db.get(Area, ft.area_id)
+            table_info = {
+                "table_id": ft.id,
+                "number": ft.number,
+                "area_name": area.name_ar if area else "",
+            }
+
     return {
         "id": order.id,
         "order_number": order.order_number,
@@ -401,4 +460,6 @@ def _get_order_view_data(db, order=None) -> dict:
         "total": order.total or 0,
         "status": order.status,
         "table_id": order.table_id,
+        "table_info": table_info,
+        "opened_at": order.created_at.isoformat() if order.created_at else None,
     }

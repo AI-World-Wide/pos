@@ -169,4 +169,69 @@
   </div>
   {% endif %}
 </div>
+
+<!-- Table Orders Log -->
+{% if table_orders %}
+<div class="card" style="margin-top:20px">
+  <h2 style="font-size:20px;margin-bottom:12px">{{ t.order_number }} — {{ table_orders|length }} {{ t.shift_orders }}</h2>
+  <table class="data-table" id="orders-log">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>{{ t.table }}</th>
+        <th>{{ t.areas }}</th>
+        <th>{{ t.receipt_cashier }}</th>
+        <th>{{ t.receipt_date }}</th>
+        <th>⏱</th>
+        <th>{{ t.total }}</th>
+        <th>{{ t.vat_5 }}</th>
+        <th>{{ t.payment_methods }}</th>
+        <th>{{ t.items }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for o in table_orders %}
+      <tr class="order-row" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'table-row':'none'" style="cursor:pointer">
+        <td>{{ o.order_number }}</td>
+        <td>{{ o.table_label or '—' }}</td>
+        <td>{{ o.area_name or '—' }}</td>
+        <td>{{ o.cashier }}</td>
+        <td>{{ o.created_at }} → {{ o.closed_at }}</td>
+        <td>{{ o.duration }}</td>
+        <td><strong>{{ t.currency }} {{ "%.2f"|format(o.total) }}</strong></td>
+        <td>{{ "%.2f"|format(o.vat) }}</td>
+        <td>{{ o.method }}</td>
+        <td>{{ o.item_count }}</td>
+      </tr>
+      <tr class="order-detail" style="display:none;background:#faf8f4">
+        <td colspan="10" style="padding:12px">
+          <table style="width:100%;border-collapse:collapse">
+            <tr style="font-weight:600;border-bottom:1px solid #ddd">
+              <td style="padding:4px 8px">{{ t.item }}</td>
+              <td style="padding:4px 8px">{{ t.qty }}</td>
+              <td style="padding:4px 8px">{{ t.price }}</td>
+              <td style="padding:4px 8px">{{ t.total }}</td>
+            </tr>
+            {% for item in o.items %}
+            <tr style="border-bottom:1px solid #eee">
+              <td style="padding:4px 8px">{{ item.name_ar }}</td>
+              <td style="padding:4px 8px">{{ item.qty }}</td>
+              <td style="padding:4px 8px">{{ "%.2f"|format(item.unit_price) }}</td>
+              <td style="padding:4px 8px">{{ "%.2f"|format(item.total) }}</td>
+            </tr>
+            {% endfor %}
+          </table>
+          {% if o.method == 'cash' %}
+          <div style="margin-top:8px;color:#666">
+            {{ t.cash_received }}: {{ t.currency }} {{ "%.2f"|format(o.cash_received) }} |
+            {{ t.change_due }}: {{ t.currency }} {{ "%.2f"|format(o.change) }}
+          </div>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
 {% endblock %}

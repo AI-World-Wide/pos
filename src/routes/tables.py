@@ -61,6 +61,7 @@ def floor_plan():
                     "order_id": t.current_order_id,
                     "order_total": order_total,
                     "order_number": order.order_number if order else None,
+                    "opened_at": order.created_at.isoformat() if order and order.created_at else None,
                 })
 
         # Credit area stats
@@ -89,9 +90,10 @@ def floor_plan():
         db.close()
 
 
+@bp.get("/open/<int:table_id>")
 @bp.post("/open/<int:table_id>")
 def open_table(table_id: int):
-    """Open a table — create new order and assign it."""
+    """Enter a table's cashier view. Only creates an order when first item is added."""
     db = get_session()
     try:
         table = db.get(FloorTable, table_id)
@@ -99,26 +101,15 @@ def open_table(table_id: int):
             abort(404)
 
         if table.status == "occupied" and table.current_order_id:
-            # Already open — go to cashier for this order
+            # Already has an order — resume it
             session["current_order_id"] = table.current_order_id
-            return redirect(url_for("cashier.index"))
+        else:
+            # No order yet — store the table_id in session so the cashier
+            # creates the order (and marks the table occupied) only when
+            # the first item is actually added.
+            session.pop("current_order_id", None)
+            session["pending_table_id"] = table.id
 
-        # Create new order
-        from src.routes.cashier import _current_order_number
-        order = Order(
-            order_number=_current_order_number(),
-            status="open",
-            table_id=table.id,
-            cashier=session.get("username", "admin"),
-        )
-        db.add(order)
-        db.flush()
-
-        table.current_order_id = order.id
-        table.status = "occupied"
-        db.commit()
-
-        session["current_order_id"] = order.id
         return redirect(url_for("cashier.index"))
     finally:
         db.close()

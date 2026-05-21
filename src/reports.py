@@ -287,6 +287,62 @@ def get_current_shift_stats() -> dict | None:
         db.close()
 
 
+def get_table_orders_history(period: str = "today") -> list[dict]:
+    """All settled orders with their table info, for the orders log."""
+    start, end = _date_range(period)
+    db = SessionLocal()
+    try:
+        orders = (
+            db.query(Order)
+            .filter(Order.status == "settled", Order.closed_at.between(start, end))
+            .order_by(Order.closed_at.desc())
+            .all()
+        )
+        result = []
+        for o in orders:
+            table_label = ""
+            area_name = ""
+            if o.table_id:
+                ft = db.get(FloorTable, o.table_id)
+                if ft:
+                    table_label = str(ft.number)
+                    area = db.get(Area, ft.area_id)
+                    area_name = area.name_ar if area else ""
+
+            items = [
+                {"name_ar": l.item_name_ar, "qty": l.quantity,
+                 "unit_price": l.unit_price_inclusive, "total": l.line_total}
+                for l in o.lines if not l.voided
+            ]
+            duration = ""
+            if o.created_at and o.closed_at:
+                diff = int((o.closed_at - o.created_at).total_seconds())
+                h, m = divmod(diff // 60, 60)
+                duration = f"{h}:{m:02d}"
+
+            result.append({
+                "id": o.id,
+                "order_number": o.order_number,
+                "table_label": table_label,
+                "area_name": area_name,
+                "cashier": o.cashier or "",
+                "created_at": o.created_at.strftime("%H:%M") if o.created_at else "",
+                "closed_at": o.closed_at.strftime("%H:%M") if o.closed_at else "",
+                "duration": duration,
+                "subtotal": o.subtotal or 0,
+                "vat": o.vat_amount or 0,
+                "total": o.total or 0,
+                "method": o.payment_method or "",
+                "cash_received": o.cash_received or 0,
+                "change": o.change_due or 0,
+                "items": items,
+                "item_count": sum(l.quantity for l in o.lines if not l.voided),
+            })
+        return result
+    finally:
+        db.close()
+
+
 def generate_csv(period: str = "today") -> str:
     """Generate CSV report string."""
     start, end = _date_range(period)
