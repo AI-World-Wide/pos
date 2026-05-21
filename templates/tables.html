@@ -170,7 +170,7 @@
 </style>
 
 <script>
-// --- Live timers on table cards ---
+// --- Live timers on table cards (updates every second) ---
 function updateTimers() {
   document.querySelectorAll('.table-card__timer').forEach(function(el) {
     var opened = el.getAttribute('data-opened');
@@ -182,14 +182,19 @@ function updateTimers() {
     var days = Math.floor(diff / 86400);
     var hours = Math.floor((diff % 86400) / 3600);
     var mins = Math.floor((diff % 3600) / 60);
+    var secs = diff % 60;
     var parts = [];
     if (days > 0) parts.push(days + 'd');
-    parts.push(String(hours).padStart(2, '0') + ':' + String(mins).padStart(2, '0'));
+    parts.push(
+      String(hours).padStart(2, '0') + ':' +
+      String(mins).padStart(2, '0') + ':' +
+      String(secs).padStart(2, '0')
+    );
     el.querySelector('span').textContent = parts.join(' ');
   });
 }
 updateTimers();
-setInterval(updateTimers, 30000);
+setInterval(updateTimers, 1000);
 
 // --- Drag and drop table transfer ---
 var dragSourceId = null;

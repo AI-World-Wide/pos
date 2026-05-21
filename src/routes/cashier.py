@@ -13,15 +13,15 @@ bp = Blueprint("cashier", __name__)
 
 
 def _current_order_number() -> str:
-    today = date.today().isoformat()
+    today_str = date.today().strftime("%d/%m/%Y")
     db = get_session()
     try:
         count = (
             db.query(Order)
-            .filter(Order.order_number.like(f"{today}-%"))
+            .filter(Order.order_number.like(f"{today_str}-%"))
             .count()
         )
-        return f"{today}-{count + 1:04d}"
+        return f"{today_str}-{count + 1:04d}"
     finally:
         db.close()
 
