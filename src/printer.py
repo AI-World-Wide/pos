@@ -18,14 +18,13 @@ import logging
 import struct
 import threading
 import time
-from pathlib import Path
 
-from src.database import SessionLocal
-from src.models import Order, OrderLine, PrintQueue, Printer, Setting
+from src.database import SessionLocal, RUNTIME_DIR, CONFIG_PATH as _DB_CONFIG_PATH
+from src.models import Order, PrintQueue, Printer
 
 logger = logging.getLogger(__name__)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CONFIG_PATH = PROJECT_ROOT / "config.ini"
+PROJECT_ROOT = RUNTIME_DIR
+CONFIG_PATH = _DB_CONFIG_PATH
 
 
 def _config() -> configparser.ConfigParser:

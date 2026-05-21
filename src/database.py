@@ -7,22 +7,32 @@ on its own PostgreSQL install that must not be touched.
 from __future__ import annotations
 
 import configparser
-import os
+import sys
 from pathlib import Path
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker, Session
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CONFIG_PATH = PROJECT_ROOT / "config.ini"
+# When frozen (PyInstaller), data/ lives next to the .exe, not inside _MEIPASS.
+if getattr(sys, "frozen", False):
+    RUNTIME_DIR = Path(sys.executable).resolve().parent
+    BUNDLE_DIR = Path(sys._MEIPASS)
+else:
+    RUNTIME_DIR = Path(__file__).resolve().parent.parent
+    BUNDLE_DIR = RUNTIME_DIR
+
+PROJECT_ROOT = RUNTIME_DIR
+CONFIG_PATH = BUNDLE_DIR / "config.ini"
+if (RUNTIME_DIR / "config.ini").exists():
+    CONFIG_PATH = RUNTIME_DIR / "config.ini"
 
 
 def _load_db_path() -> Path:
     config = configparser.ConfigParser()
     config.read(CONFIG_PATH, encoding="utf-8")
     rel = config.get("database", "path", fallback="data/pos.db")
-    return PROJECT_ROOT / rel
+    return RUNTIME_DIR / rel
 
 
 DB_PATH = _load_db_path()

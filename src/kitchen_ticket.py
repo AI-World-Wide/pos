@@ -12,15 +12,19 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 from src.models import Category, Item, Order, OrderLine
-from src.translations.ar import T
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+import sys
+if getattr(sys, "frozen", False):
+    _BUNDLE = Path(sys._MEIPASS)
+else:
+    _BUNDLE = Path(__file__).resolve().parent.parent
+
 TICKET_WIDTH = 576
 
 
 def _font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     paths = [
-        PROJECT_ROOT / "static" / "fonts" / ("Cairo-Bold.ttf" if bold else "Cairo-Regular.ttf"),
+        _BUNDLE / "static" / "fonts" / ("Cairo-Bold.ttf" if bold else "Cairo-Regular.ttf"),
         Path("C:/Windows/Fonts/segoeui.ttf"),
     ]
     for p in paths:

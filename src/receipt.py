@@ -12,17 +12,24 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+from src.database import RUNTIME_DIR, CONFIG_PATH as _DB_CONFIG_PATH
 from src.models import Order, Setting
 from src.translations.ar import T
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CONFIG_PATH = PROJECT_ROOT / "config.ini"
+import sys
+if getattr(sys, "frozen", False):
+    _BUNDLE = Path(sys._MEIPASS)
+else:
+    _BUNDLE = Path(__file__).resolve().parent.parent
+
+PROJECT_ROOT = RUNTIME_DIR
+CONFIG_PATH = _DB_CONFIG_PATH
 RECEIPT_WIDTH = 576
 
 # Font paths — try bundled Cairo TTF first, fall back to system Arabic fonts
 _FONT_PATHS = [
-    PROJECT_ROOT / "static" / "fonts" / "Cairo-Regular.ttf",
-    PROJECT_ROOT / "static" / "fonts" / "Cairo-Bold.ttf",
+    _BUNDLE / "static" / "fonts" / "Cairo-Regular.ttf",
+    _BUNDLE / "static" / "fonts" / "Cairo-Bold.ttf",
     Path("C:/Windows/Fonts/segoeui.ttf"),
     Path("C:/Windows/Fonts/arial.ttf"),
 ]
@@ -68,7 +75,6 @@ def render_receipt(order: Order, db) -> Image.Image:
     """Render a full customer receipt as a Pillow Image (576px wide)."""
     W = RECEIPT_WIDTH
     MARGIN = 20
-    TW = W - MARGIN * 2  # text width
 
     # Gather data
     cafe_name = _get_setting(db, "cafe_name_ar", T["cafe_name_default"])

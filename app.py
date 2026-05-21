@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import configparser
 import logging
+import sys
 from pathlib import Path
 
 from flask import Flask, redirect, session, url_for
@@ -20,8 +21,20 @@ from src.routes.reports import bp as reports_bp
 from src.routes.settings import bp as settings_bp
 from src.translations.ar import T
 
-PROJECT_ROOT = Path(__file__).resolve().parent
-CONFIG_PATH = PROJECT_ROOT / "config.ini"
+# PyInstaller sets _MEIPASS for bundled assets (templates, static, config).
+# Data files (pos.db, backups, seed) live next to the .exe, not inside _MEIPASS.
+if getattr(sys, "frozen", False):
+    BUNDLE_DIR = Path(sys._MEIPASS)  # bundled templates/static/config
+    RUNTIME_DIR = Path(sys.executable).resolve().parent  # data/ lives here
+else:
+    BUNDLE_DIR = Path(__file__).resolve().parent
+    RUNTIME_DIR = BUNDLE_DIR
+
+PROJECT_ROOT = RUNTIME_DIR
+CONFIG_PATH = BUNDLE_DIR / "config.ini"
+# Prefer runtime config.ini if it exists (operator can edit it next to .exe)
+if (RUNTIME_DIR / "config.ini").exists():
+    CONFIG_PATH = RUNTIME_DIR / "config.ini"
 
 # Configure logging to file
 log_path = PROJECT_ROOT / "data" / "error.log"
@@ -42,8 +55,8 @@ def create_app() -> Flask:
 
     app = Flask(
         __name__,
-        template_folder=str(PROJECT_ROOT / "templates"),
-        static_folder=str(PROJECT_ROOT / "static"),
+        template_folder=str(BUNDLE_DIR / "templates"),
+        static_folder=str(BUNDLE_DIR / "static"),
     )
     app.config["SECRET_KEY"] = config.get("app", "secret_key", fallback="dev-secret-change-me")
 
