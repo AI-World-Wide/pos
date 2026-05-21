@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="page-title">{{ t.settings_title }}</h1>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="flash flash--{{ cat }}">
+      {% if msg == 'settings_saved' %}{{ t.settings_saved }}{% else %}{{ msg }}{% endif %}
+    </div>
+  {% endfor %}
+{% endwith %}
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+<!-- Cafe info + VAT -->
+<div class="card">
+  <h2 style="font-size:20px;margin-bottom:14px">{{ t.cafe_name }}</h2>
+  <form method="post" action="{{ url_for('settings.save_settings') }}">
+    <div class="form-group">
+      <label>{{ t.cafe_name }}</label>
+      <input class="form-input" name="cafe_name_ar" value="{{ settings.cafe_name_ar }}">
+    </div>
+    <div class="form-group">
+      <label>{{ t.tax_number }} (TRN)</label>
+      <input class="form-input" name="trn" value="{{ settings.trn }}">
+    </div>
+    <div class="form-group">
+      <label>{{ t.vat_rate }}</label>
+      <input class="form-input" name="vat_rate" type="number" step="0.01" value="{{ settings.vat_rate }}">
+    </div>
+    <div class="form-group">
+      <label>{{ t.kick_code }}</label>
+      <input class="form-input" name="kick_code" value="{{ settings.kick_code }}" placeholder="27,112,0,25,250">
+    </div>
+
+    <h3 style="font-size:18px;margin:18px 0 10px">{{ t.smtp_settings }}</h3>
+    <div class="form-group">
+      <label>{{ t.smtp_host }}</label>
+      <input class="form-input" name="smtp_host" value="{{ settings.smtp_host }}">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group">
+        <label>{{ t.smtp_port }}</label>
+        <input class="form-input" name="smtp_port" value="{{ settings.smtp_port }}">
+      </div>
+      <div class="form-group">
+        <label>{{ t.smtp_user }}</label>
+        <input class="form-input" name="smtp_username" value="{{ settings.smtp_username }}">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>{{ t.smtp_pass }}</label>
+      <input class="form-input" name="smtp_password" type="password" value="{{ settings.smtp_password }}">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group">
+        <label>{{ t.smtp_from }}</label>
+        <input class="form-input" name="smtp_from" value="{{ settings.smtp_from }}">
+      </div>
+      <div class="form-group">
+        <label>{{ t.smtp_to }}</label>
+        <input class="form-input" name="smtp_to" value="{{ settings.smtp_to }}">
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button type="submit" class="btn btn--success">{{ t.save_settings }}</button>
+    </div>
+  </form>
+  <div style="display:flex;gap:10px;margin-top:10px">
+    <form method="post" action="{{ url_for('settings.test_email') }}">
+      <button type="submit" class="btn btn--primary btn--sm">{{ t.smtp_settings }} Test</button>
+    </form>
+  </div>
+</div>
+
+<!-- Printers -->
+<div class="card">
+  <h2 style="font-size:20px;margin-bottom:14px">{{ t.printer_settings }}</h2>
+
+  <h3 style="font-size:16px;margin-bottom:8px">{{ t.discover_printers }}</h3>
+  {% if discovered %}
+    {% for p in discovered %}
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee">
+        <span>{{ p.name }} <small style="color:#999">{{ p.port }}</small></span>
+        <form method="post" action="{{ url_for('settings.add_printer') }}" style="display:flex;gap:6px">
+          <input type="hidden" name="printer_name" value="{{ p.name }}">
+          <select name="purpose" class="form-select" style="width:auto;height:36px">
+            <option value="receipt">{{ t.printer_receipt }}</option>
+            <option value="kitchen">{{ t.printer_kitchen }}</option>
+            <option value="shisha">{{ t.printer_shisha }}</option>
+          </select>
+          <button type="submit" class="btn btn--success btn--sm">+</button>
+        </form>
+      </div>
+    {% endfor %}
+  {% else %}
+    <p style="color:#999;margin-bottom:12px">{{ t.no_printers }}</p>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('settings.add_printer') }}" style="display:flex;gap:6px;margin-top:12px">
+    <input class="form-input" name="printer_name" placeholder="{{ t.printer_name }}" style="flex:1">
+    <select name="purpose" class="form-select" style="width:auto">
+      <option value="receipt">{{ t.printer_receipt }}</option>
+      <option value="kitchen">{{ t.printer_kitchen }}</option>
+      <option value="shisha">{{ t.printer_shisha }}</option>
+    </select>
+    <button type="submit" class="btn btn--success">+</button>
+  </form>
+
+  <h3 style="font-size:16px;margin:18px 0 8px">{{ t.printer_settings }}</h3>
+  {% for p in printers_db %}
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee">
+      <span>{{ p.name }} — <strong>{{ p.purpose }}</strong></span>
+      <form method="post" action="{{ url_for('settings.delete_printer', pid=p.id) }}">
+        <button type="submit" class="btn btn--danger btn--sm">×</button>
+      </form>
+    </div>
+  {% endfor %}
+
+  <form method="post" action="{{ url_for('settings.test_print') }}" style="margin-top:14px">
+    <button type="submit" class="btn btn--primary">{{ t.test_print }}</button>
+  </form>
+</div>
+
+</div>
+
+<!-- Users + Permissions -->
+<div class="card" style="margin-top:20px">
+  <h2 style="font-size:20px;margin-bottom:14px">{{ t.user_management }}</h2>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>{{ t.user_name }}</th>
+        <th>{{ t.user_role }}</th>
+        <th>{{ t.item_visible }}</th>
+        <th>{{ t.user_pin }}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <form method="post" action="{{ url_for('settings.update_user', uid=u.id) }}">
+          <td><input class="form-input" name="name_ar" value="{{ u.name_ar }}" style="height:36px"></td>
+          <td>
+            <select class="form-select" name="role" style="height:36px">
+              <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>{{ t.role_admin }}</option>
+              <option value="cashier" {% if u.role == 'cashier' %}selected{% endif %}>{{ t.role_cashier }}</option>
+              <option value="waiter" {% if u.role == 'waiter' %}selected{% endif %}>{{ t.role_waiter }}</option>
+            </select>
+          </td>
+          <td><input type="checkbox" name="active" {% if u.active %}checked{% endif %}></td>
+          <td><input class="form-input" name="pin" placeholder="****" style="height:36px;width:80px"></td>
+          <td><button type="submit" class="btn btn--primary btn--sm">{{ t.save }}</button></td>
+        </form>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <form method="post" action="{{ url_for('settings.add_user') }}" style="display:flex;gap:8px;margin-top:14px;align-items:end">
+    <div class="form-group" style="margin:0;flex:1">
+      <input class="form-input" name="username" placeholder="username" style="height:36px">
+    </div>
+    <div class="form-group" style="margin:0;flex:1">
+      <input class="form-input" name="name_ar" placeholder="{{ t.user_name }}" style="height:36px">
+    </div>
+    <select class="form-select" name="role" style="width:auto;height:36px">
+      <option value="cashier">{{ t.role_cashier }}</option>
+      <option value="waiter">{{ t.role_waiter }}</option>
+      <option value="admin">{{ t.role_admin }}</option>
+    </select>
+    <input class="form-input" name="pin" placeholder="PIN" style="width:80px;height:36px">
+    <button type="submit" class="btn btn--success btn--sm">{{ t.add_item }}</button>
+  </form>
+</div>
+
+<!-- Permission matrix -->
+<div class="card" style="margin-top:20px">
+  <h2 style="font-size:20px;margin-bottom:14px">{{ t.permissions }}</h2>
+  <form method="post" action="{{ url_for('settings.save_permissions') }}">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>{{ t.permissions }}</th>
+          <th>{{ t.role_admin }}</th>
+          <th>{{ t.role_cashier }}</th>
+          <th>{{ t.role_waiter }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for key in perm_keys %}
+        <tr>
+          <td>{{ t['perm_' + key] if t['perm_' + key] != ('<missing:perm_' + key + '>') else key }}</td>
+          {% for role in ['admin', 'cashier', 'waiter'] %}
+            <td>
+              <input type="checkbox" name="perm_{{ role }}_{{ key }}"
+                     {% if all_perms.get(role, {}).get(key, False) %}checked{% endif %}>
+            </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button type="submit" class="btn btn--success" style="margin-top:12px">{{ t.save_settings }}</button>
+  </form>
+</div>
+
+{% endblock %}

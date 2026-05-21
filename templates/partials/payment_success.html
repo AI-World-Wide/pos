@@ -1,0 +1,17 @@
+<div class="modal modal--success" onclick="event.stopPropagation()">
+  <div class="success-icon">✓</div>
+  <h2 class="modal__title">{{ t.payment_success }}</h2>
+  {% if change > 0 %}
+    <div class="success-change">
+      <span>{{ t.payment_change }}</span>
+      <span class="success-amount">{{ t.currency }} {{ "%.2f"|format(change) }}</span>
+    </div>
+  {% endif %}
+  <button class="action-btn action-btn--pay"
+          onclick="document.getElementById('modal-overlay').style.display='none';document.getElementById('order-panel').innerHTML=document.getElementById('new-order-data').innerHTML">
+    {{ t.new_order }}
+  </button>
+</div>
+<div id="new-order-data" style="display:none">
+  {% include "partials/order_panel.html" %}
+</div>

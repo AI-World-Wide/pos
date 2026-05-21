@@ -1,0 +1,11 @@
+{% for i in items %}
+  <button class="item-btn"
+          hx-post="{{ url_for('cashier.add_to_order', item_id=i.id) }}"
+          hx-target="#order-panel"
+          hx-swap="innerHTML">
+    <span class="item-btn__name">{{ i.name_ar }}</span>
+    <span class="item-btn__price">{{ t.currency }} {{ "%.2f"|format(i.price) }}</span>
+  </button>
+{% else %}
+  <div class="empty-msg">{{ t.no_items }}</div>
+{% endfor %}

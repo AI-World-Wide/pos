@@ -1,0 +1,29 @@
+<div class="modal" onclick="event.stopPropagation()">
+  <h2 class="modal__title">{{ t.held_orders }}</h2>
+  {% if held %}
+    <div class="held-list">
+      {% for h in held %}
+        <div class="held-item">
+          <div class="held-item__info">
+            <span class="held-item__num">{{ h.order_number }}</span>
+            <span class="held-item__meta">{{ h.line_count }} {{ t.items_count }} — {{ t.currency }} {{ "%.2f"|format(h.total) }}</span>
+          </div>
+          <button class="action-btn action-btn--send"
+                  hx-post="{{ url_for('cashier.resume_order', order_id=h.id) }}"
+                  hx-target="#order-panel"
+                  hx-swap="innerHTML"
+                  onclick="document.getElementById('modal-overlay').style.display='none'">
+            {{ t.resume }}
+          </button>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="order-empty">{{ t.no_held_orders }}</div>
+  {% endif %}
+  <button class="action-btn action-btn--cancel"
+          onclick="document.getElementById('modal-overlay').style.display='none'"
+          style="margin-top:16px;width:100%">
+    {{ t.cancel }}
+  </button>
+</div>

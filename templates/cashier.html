@@ -1,38 +1,43 @@
 {% extends "base.html" %}
-{% block content %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cashier.css') }}">
+{% endblock %}
 
-{% if categories is not none %}
-  <h1 class="page-title">{{ t.categories }}</h1>
-  <p class="page-sub">{{ t.phase1_subheading }}</p>
-
-  <div class="grid grid--categories">
+{% block body %}
+<div class="pos">
+  <!-- RIGHT PANEL: Categories -->
+  <aside class="pos__categories">
     {% for c in categories %}
-      <a class="card card--category" href="{{ url_for('cashier.category', cat_id=c.id) }}">
-        <div class="card__title">{{ c.name_ar }}</div>
-        <div class="card__meta">{{ c.item_count }} {{ t.phase1_items_count }}</div>
-      </a>
+      <button class="cat-btn {% if c.id == active_cat_id %}cat-btn--active{% endif %}"
+              hx-get="{{ url_for('cashier.get_items', cat_id=c.id) }}"
+              hx-target="#items-grid"
+              hx-swap="innerHTML"
+              onclick="document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('cat-btn--active'));this.classList.add('cat-btn--active')">
+        {{ c.name_ar }}
+      </button>
     {% endfor %}
-  </div>
-{% endif %}
+  </aside>
 
-{% if items is not none %}
-  <div class="page-head">
-    <a class="btn btn--back" href="{{ url_for('cashier.index') }}">‹ {{ t.phase1_back_to_categories }}</a>
-    <h1 class="page-title">{{ category.name_ar }}</h1>
-  </div>
-
-  {% if items|length == 0 %}
-    <p class="empty">{{ t.phase1_no_items }}</p>
-  {% else %}
-    <div class="grid grid--items">
-      {% for i in items %}
-        <div class="card card--item">
-          <div class="card__title">{{ i.name_ar }}</div>
-          <div class="card__price"><span class="currency">{{ t.currency }}</span> {{ "%.2f"|format(i.price) }}</div>
-        </div>
-      {% endfor %}
+  <!-- CENTER PANEL: Items grid -->
+  <section class="pos__items">
+    <div id="items-grid" class="items-grid">
+      {% include "partials/items_grid.html" %}
     </div>
-  {% endif %}
-{% endif %}
+  </section>
 
+  <!-- LEFT PANEL: Current order -->
+  <aside class="pos__order">
+    <div id="order-panel">
+      {% include "partials/order_panel.html" %}
+    </div>
+  </aside>
+</div>
+
+<!-- Modal overlay -->
+<div id="modal-overlay" class="modal-overlay" style="display:none"
+     onclick="if(event.target===this){this.style.display='none';this.innerHTML=''}">
+</div>
+
+<script src="{{ url_for('static', filename='js/htmx.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/cashier.js') }}"></script>
 {% endblock %}

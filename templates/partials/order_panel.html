@@ -1,0 +1,71 @@
+<div class="order-head">
+  <span class="order-title">{{ t.current_order }}</span>
+  {% if order.order_number %}
+    <span class="order-num">{{ order.order_number }}</span>
+  {% endif %}
+</div>
+
+<div class="order-lines" id="order-lines">
+  {% if order.lines %}
+    {% for l in order.lines %}
+      <div class="order-line {% if l.sent %}order-line--sent{% endif %}">
+        <div class="order-line__info">
+          <span class="order-line__name">{{ l.name_ar }}</span>
+          <span class="order-line__price">{{ "%.2f"|format(l.line_total) }}</span>
+        </div>
+        <div class="order-line__controls">
+          <button class="qty-btn qty-btn--dec"
+                  hx-post="{{ url_for('cashier.adjust_qty', line_id=l.id, action='dec') }}"
+                  hx-target="#order-panel" hx-swap="innerHTML">−</button>
+          <span class="qty-val">{{ l.qty }}</span>
+          <button class="qty-btn qty-btn--inc"
+                  hx-post="{{ url_for('cashier.adjust_qty', line_id=l.id, action='inc') }}"
+                  hx-target="#order-panel" hx-swap="innerHTML">+</button>
+          <button class="qty-btn qty-btn--void"
+                  hx-post="{{ url_for('cashier.adjust_qty', line_id=l.id, action='void') }}"
+                  hx-target="#order-panel" hx-swap="innerHTML">×</button>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="order-empty">{{ t.order_empty }}</div>
+  {% endif %}
+</div>
+
+<div class="order-totals">
+  <div class="total-row">
+    <span>{{ t.subtotal }}</span>
+    <span>{{ t.currency }} {{ "%.2f"|format(order.subtotal) }}</span>
+  </div>
+  <div class="total-row total-row--vat">
+    <span>{{ t.vat_5 }}</span>
+    <span>{{ t.currency }} {{ "%.2f"|format(order.vat_amount) }}</span>
+  </div>
+  <div class="total-row total-row--grand">
+    <span>{{ t.total }}</span>
+    <span>{{ t.currency }} {{ "%.2f"|format(order.total) }}</span>
+  </div>
+</div>
+
+<div class="order-actions">
+  <button class="action-btn action-btn--hold"
+          hx-post="{{ url_for('cashier.hold_order') }}"
+          hx-target="#order-panel" hx-swap="innerHTML">{{ t.hold }}</button>
+  <button class="action-btn action-btn--held"
+          hx-get="{{ url_for('cashier.held_orders') }}"
+          hx-target="#modal-overlay"
+          hx-swap="innerHTML"
+          onclick="document.getElementById('modal-overlay').style.display='flex'">{{ t.held_orders }}</button>
+  <button class="action-btn action-btn--cancel"
+          hx-post="{{ url_for('cashier.cancel_order') }}"
+          hx-target="#order-panel" hx-swap="innerHTML"
+          hx-confirm="هل أنت متأكد من إلغاء الطلب؟">{{ t.cancel }}</button>
+  <button class="action-btn action-btn--send"
+          hx-post="{{ url_for('cashier.send_to_kitchen') }}"
+          hx-target="#order-panel" hx-swap="innerHTML">{{ t.send }}</button>
+  <button class="action-btn action-btn--pay"
+          hx-post="{{ url_for('cashier.pay_order') }}"
+          hx-target="#modal-overlay"
+          hx-swap="innerHTML"
+          onclick="document.getElementById('modal-overlay').style.display='flex'">{{ t.pay }}</button>
+</div>

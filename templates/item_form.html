@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="page-title">{% if item %}{{ t.edit_item }}{% else %}{{ t.add_item }}{% endif %}</h1>
+
+<div class="card" style="max-width:600px">
+  <form method="post"
+        action="{% if item %}{{ url_for('backoffice.item_edit', item_id=item.id) }}{% else %}{{ url_for('backoffice.item_add') }}{% endif %}">
+
+    <div class="form-group">
+      <label>{{ t.item_name_ar }}</label>
+      <input class="form-input" name="name_ar" value="{{ item.name_ar if item else '' }}" required>
+    </div>
+
+    <div class="form-group">
+      <label>{{ t.item_name_en }}</label>
+      <input class="form-input" name="name_en" value="{{ item.name_en if item and item.name_en else '' }}">
+    </div>
+
+    <div class="form-group">
+      <label>{{ t.item_price }} (AED)</label>
+      <input class="form-input" name="price" type="number" step="0.01" min="0"
+             value="{{ '%.2f'|format(item.price_inclusive) if item else '' }}" required>
+    </div>
+
+    <div class="form-group">
+      <label>{{ t.item_category }}</label>
+      <select class="form-select" name="category_id" required>
+        {% for c in categories %}
+          <option value="{{ c.id }}" {% if item and item.category_id == c.id %}selected{% endif %}>
+            {{ c.name_ar }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>{{ t.item_station }}</label>
+      <select class="form-select" name="kitchen_station">
+        <option value="" {% if not item or not item.kitchen_station %}selected{% endif %}>—</option>
+        <option value="Bar" {% if item and item.kitchen_station == 'Bar' %}selected{% endif %}>Bar</option>
+        <option value="Shisha" {% if item and item.kitchen_station == 'Shisha' %}selected{% endif %}>Shisha</option>
+        <option value="Kitchen" {% if item and item.kitchen_station == 'Kitchen' %}selected{% endif %}>Kitchen</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>
+        <input type="checkbox" name="visible" {% if not item or item.visible %}checked{% endif %}>
+        {{ t.item_visible }}
+      </label>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button type="submit" class="btn btn--success">{{ t.save }}</button>
+      <a href="{{ url_for('backoffice.items_list') }}" class="btn btn--secondary">{{ t.cancel_edit }}</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

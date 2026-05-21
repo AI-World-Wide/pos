@@ -5,15 +5,38 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>{{ t.app_title }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  {% block head %}{% endblock %}
 </head>
 <body>
+  {% block body %}
   <header class="topbar">
-    <a class="topbar__home" href="{{ url_for('cashier.index') }}">{{ t.home }}</a>
-    <div class="topbar__title">{{ t.app_title }}</div>
+    <div class="topbar__right">
+      <span class="topbar__title">{{ t.app_title }}</span>
+    </div>
+    <div class="topbar__left">
+      {% if session.get('username') %}
+        <span class="topbar__user">{{ session.get('name_ar', '') }}</span>
+      {% endif %}
+      <a class="topbar__link" href="{{ url_for('cashier.index') }}">{{ t.home }}</a>
+      {% if session.get('role') == 'admin' or session.get('can_view_reports') %}
+        <a class="topbar__link" href="{{ url_for('reports.index') }}">{{ t.reports }}</a>
+      {% endif %}
+      {% if session.get('role') == 'admin' %}
+        <a class="topbar__link" href="{{ url_for('backoffice.items_list') }}">{{ t.item_management }}</a>
+        <a class="topbar__link" href="{{ url_for('settings.index') }}">{{ t.settings }}</a>
+      {% endif %}
+      {% if session.get('username') %}
+        <a class="topbar__link topbar__link--logout" href="{{ url_for('auth.logout') }}">{{ t.logout }}</a>
+      {% endif %}
+    </div>
   </header>
 
   <main class="content">
     {% block content %}{% endblock %}
   </main>
+  {% endblock %}
+
+  <script src="{{ url_for('static', filename='js/htmx.min.js') }}"></script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

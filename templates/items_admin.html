@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="page-title">{{ t.item_management }}</h1>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+    <div class="flash flash--{{ cat }}">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
+  <a href="{{ url_for('backoffice.item_add_form') }}" class="btn btn--success">{{ t.add_item }}</a>
+  <form method="post" action="{{ url_for('backoffice.item_import') }}" style="display:inline">
+    <button type="submit" class="btn btn--primary">{{ t.import_xlsx }}</button>
+  </form>
+</div>
+
+<div class="tabs">
+  <a class="tab {% if not active_cat %}tab--active{% endif %}"
+     href="{{ url_for('backoffice.items_list') }}">{{ t.categories }}</a>
+  {% for c in categories %}
+    <a class="tab {% if active_cat == c.id %}tab--active{% endif %}"
+       href="{{ url_for('backoffice.items_list', cat=c.id) }}">{{ c.name_ar }}</a>
+  {% endfor %}
+</div>
+
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>{{ t.item_name_ar }}</th>
+      <th>{{ t.item_name_en }}</th>
+      <th>{{ t.item_price }}</th>
+      <th>{{ t.item_category }}</th>
+      <th>{{ t.item_station }}</th>
+      <th>{{ t.item_visible }}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for i in items %}
+    <tr>
+      <td>{{ i.name_ar }}</td>
+      <td>{{ i.name_en or '' }}</td>
+      <td>{{ "%.2f"|format(i.price_inclusive) }}</td>
+      <td>{{ i.category.name_ar if i.category else '' }}</td>
+      <td>{{ i.kitchen_station }}</td>
+      <td>{% if i.visible %}✓{% else %}✗{% endif %}</td>
+      <td>
+        <a href="{{ url_for('backoffice.item_edit_form', item_id=i.id) }}" class="btn btn--primary btn--sm">{{ t.edit_item }}</a>
+        <form method="post" action="{{ url_for('backoffice.item_delete', item_id=i.id) }}" style="display:inline">
+          <button type="submit" class="btn btn--danger btn--sm"
+                  onclick="return confirm('{{ t.delete_item }}?')">{{ t.delete_item }}</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,90 @@
+<div class="modal" onclick="event.stopPropagation()">
+  <h2 class="modal__title">{{ t.payment_title }}</h2>
+
+  <div class="modal__totals">
+    <div class="total-row">
+      <span>{{ t.subtotal }}</span>
+      <span>{{ t.currency }} {{ "%.2f"|format(order.subtotal) }}</span>
+    </div>
+    <div class="total-row total-row--vat">
+      <span>{{ t.vat_5 }}</span>
+      <span>{{ t.currency }} {{ "%.2f"|format(order.vat_amount) }}</span>
+    </div>
+    <div class="total-row total-row--grand">
+      <span>{{ t.total }}</span>
+      <span>{{ t.currency }} {{ "%.2f"|format(order.total) }}</span>
+    </div>
+  </div>
+
+  <div class="modal__methods">
+    <button class="method-btn method-btn--active" onclick="selectMethod('cash', this)">{{ t.payment_cash }}</button>
+    <button class="method-btn" onclick="selectMethod('card', this)">{{ t.payment_card }}</button>
+  </div>
+
+  <div id="cash-section">
+    <div class="modal__input-group">
+      <label>{{ t.payment_amount }}</label>
+      <input type="number" id="cash-input" class="modal__input"
+             value="{{ "%.2f"|format(order.total) }}"
+             min="{{ "%.2f"|format(order.total) }}"
+             step="0.01"
+             oninput="calcChange()">
+    </div>
+    <div class="modal__change">
+      <span>{{ t.payment_change }}</span>
+      <span id="change-display">{{ t.currency }} 0.00</span>
+    </div>
+    <div class="modal__quick-cash">
+      {% for amt in [10, 20, 50, 100, 200, 500] %}
+        <button class="quick-btn" onclick="document.getElementById('cash-input').value='{{ amt }}';calcChange()">{{ amt }}</button>
+      {% endfor %}
+      <button class="quick-btn quick-btn--exact" onclick="document.getElementById('cash-input').value='{{ "%.2f"|format(order.total) }}';calcChange()">{{ t.payment_exact }}</button>
+    </div>
+  </div>
+
+  <div class="modal__actions">
+    <button class="action-btn action-btn--pay modal__confirm" onclick="submitPayment({{ order.total }})">
+      {{ t.payment_confirm }}
+    </button>
+    <button class="action-btn action-btn--cancel"
+            onclick="document.getElementById('modal-overlay').style.display='none'">
+      {{ t.payment_cancel }}
+    </button>
+  </div>
+</div>
+
+<script>
+var payMethod = 'cash';
+var orderTotal = {{ order.total }};
+
+function selectMethod(m, btn) {
+  payMethod = m;
+  document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('method-btn--active'));
+  btn.classList.add('method-btn--active');
+  document.getElementById('cash-section').style.display = m === 'cash' ? 'block' : 'none';
+}
+
+function calcChange() {
+  var paid = parseFloat(document.getElementById('cash-input').value) || 0;
+  var change = Math.max(0, paid - orderTotal);
+  document.getElementById('change-display').textContent = 'AED ' + change.toFixed(2);
+}
+
+function submitPayment(total) {
+  var cashVal = payMethod === 'cash' ? document.getElementById('cash-input').value : total;
+  if (payMethod === 'cash' && parseFloat(cashVal) < total) {
+    document.getElementById('cash-input').style.borderColor = '#e74c3c';
+    return;
+  }
+  var form = new FormData();
+  form.append('method', payMethod);
+  form.append('cash_received', cashVal);
+  fetch('{{ url_for("cashier.settle_order") }}', {method: 'POST', body: form})
+    .then(r => r.text())
+    .then(html => {
+      document.getElementById('modal-overlay').innerHTML = html;
+    });
+}
+
+calcChange();
+</script>
