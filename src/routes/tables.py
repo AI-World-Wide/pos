@@ -239,10 +239,14 @@ def split_execute(table_id: int):
         if action == "partial_pay":
             # Create a new order with the selected items, then redirect to
             # the cashier payment flow so the user sees the payment modal.
+            from src.models import Shift
+            shift = db.query(Shift).filter(Shift.status == "open").order_by(Shift.opened_at.desc()).first()
+
             partial_order = Order(
                 order_number=_current_order_number(),
                 status="open",
                 table_id=table.id,
+                shift_id=shift.id if shift else None,
                 cashier=session.get("username", "admin"),
             )
             db.add(partial_order)
@@ -270,8 +274,9 @@ def split_execute(table_id: int):
 
             db.commit()
 
-            # Set the partial order as the active one and go to cashier pay
+            # Set the partial order as the active one and go to cashier with auto-pay flag
             session["current_order_id"] = partial_order.id
+            session["auto_pay"] = True
             return redirect(url_for("cashier.index"))
 
         # --- Split to another table ---
@@ -283,10 +288,14 @@ def split_execute(table_id: int):
             return redirect(url_for("tables.split_form", table_id=table_id))
 
         # Create new order on target table
+        from src.models import Shift
+        shift = db.query(Shift).filter(Shift.status == "open").order_by(Shift.opened_at.desc()).first()
+
         new_order = Order(
             order_number=_current_order_number(),
             status="open",
             table_id=target_table.id,
+            shift_id=shift.id if shift else None,
             cashier=session.get("username", "admin"),
         )
         db.add(new_order)

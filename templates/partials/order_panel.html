@@ -44,6 +44,9 @@
             <button class="qty-btn qty-btn--dec"
                     hx-post="{{ url_for('cashier.adjust_qty', line_id=l.id, action='dec') }}"
                     hx-target="#order-panel" hx-swap="innerHTML">−</button>
+          {% else %}
+            <button class="qty-btn qty-btn--dec"
+                    onclick="showAdminPinModal('{{ url_for('cashier.adjust_qty', line_id=l.id, action='dec') }}')">−</button>
           {% endif %}
           <span class="qty-val">{{ l.qty }}</span>
           <button class="qty-btn qty-btn--inc"
@@ -53,6 +56,9 @@
             <button class="qty-btn qty-btn--void"
                     hx-post="{{ url_for('cashier.adjust_qty', line_id=l.id, action='void') }}"
                     hx-target="#order-panel" hx-swap="innerHTML">×</button>
+          {% else %}
+            <button class="qty-btn qty-btn--void"
+                    onclick="showAdminPinModal('{{ url_for('cashier.adjust_qty', line_id=l.id, action='void') }}')">×</button>
           {% endif %}
         </div>
       </div>
@@ -81,19 +87,19 @@
 <div class="order-table-actions">
   <a href="{{ url_for('tables.floor_plan') }}" class="action-btn action-btn--held" style="text-decoration:none">{{ t.tables }}</a>
   <a href="{{ url_for('tables.split_form', table_id=order.table_id) }}" class="action-btn action-btn--hold" style="text-decoration:none">{{ t.split_items }}</a>
-  {% if order.move_targets %}
-  <div class="move-dropdown" onclick="event.stopPropagation()">
-    <form method="post" action="{{ url_for('tables.move_table', table_id=order.table_id) }}" style="display:flex;gap:4px">
-      <select name="target_table_id" class="move-select">
-        {% for mt in order.move_targets %}
-          <option value="{{ mt.table_id }}">{{ mt.label }}</option>
-        {% endfor %}
-      </select>
-      <button type="submit" class="action-btn action-btn--send" style="min-height:36px;font-size:13px;padding:0 10px">{{ t.move_to }}</button>
-    </form>
-  </div>
-  {% endif %}
 </div>
+{% if order.move_targets %}
+<div class="order-move-bar" onclick="event.stopPropagation()">
+  <form method="post" action="{{ url_for('tables.move_table', table_id=order.table_id) }}" style="display:flex;gap:6px;width:100%">
+    <select name="target_table_id" class="move-select" style="flex:1">
+      {% for mt in order.move_targets %}
+        <option value="{{ mt.table_id }}">{{ mt.label }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="action-btn action-btn--send" style="min-height:38px;font-size:14px;padding:0 14px;flex-shrink:0">{{ t.move_to }}</button>
+  </form>
+</div>
+{% endif %}
 {% endif %}
 
 <div class="order-actions">

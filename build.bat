@@ -38,6 +38,9 @@ pyinstaller --noconfirm ^
     --hidden-import=src.routes.backoffice ^
     --hidden-import=src.routes.reports ^
     --hidden-import=src.routes.settings ^
+    --hidden-import=src.routes.shift ^
+    --hidden-import=src.routes.tables ^
+    --hidden-import=src.seed_tables ^
     --hidden-import=win32print ^
     --hidden-import=win32api ^
     app.py

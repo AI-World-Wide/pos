@@ -64,6 +64,69 @@
      onclick="if(event.target===this){this.style.display='none';this.innerHTML=''}">
 </div>
 
+<!-- Admin PIN modal for non-admin delete/void -->
+<div id="admin-pin-overlay" class="modal-overlay" style="display:none"
+     onclick="if(event.target===this){this.style.display='none'}">
+  <div class="modal-box" style="max-width:320px;padding:24px;text-align:center" onclick="event.stopPropagation()">
+    <h3 style="margin-bottom:16px;font-size:20px">{{ t.admin_pin_required }}</h3>
+    <input type="password" id="admin-pin-input" class="form-input"
+           inputmode="numeric" pattern="[0-9]*" maxlength="6"
+           placeholder="****" style="font-size:28px;text-align:center;height:56px;margin-bottom:14px">
+    <div style="display:flex;gap:10px">
+      <button class="btn btn--primary" style="flex:1;min-height:48px;font-size:18px"
+              onclick="submitAdminPin()">{{ t.confirm }}</button>
+      <button class="btn btn--secondary" style="flex:1;min-height:48px;font-size:18px"
+              onclick="document.getElementById('admin-pin-overlay').style.display='none'">{{ t.cancel }}</button>
+    </div>
+    <div id="admin-pin-error" style="color:#e74c3c;margin-top:10px;display:none">{{ t.wrong_pin }}</div>
+  </div>
+</div>
+
 <script src="{{ url_for('static', filename='js/htmx.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/cashier.js') }}"></script>
+{% if auto_pay %}
+<script>
+// Auto-open payment modal after partial pay split
+document.addEventListener('DOMContentLoaded', function() {
+  var payBtn = document.querySelector('.action-btn--pay');
+  if (payBtn) payBtn.click();
+});
+</script>
+{% endif %}
+<script>
+var pendingAdminAction = null;
+function showAdminPinModal(actionUrl) {
+  pendingAdminAction = actionUrl;
+  var overlay = document.getElementById('admin-pin-overlay');
+  var input = document.getElementById('admin-pin-input');
+  document.getElementById('admin-pin-error').style.display = 'none';
+  input.value = '';
+  overlay.style.display = 'flex';
+  setTimeout(function(){ input.focus(); }, 100);
+}
+function submitAdminPin() {
+  if (!pendingAdminAction) return;
+  var pin = document.getElementById('admin-pin-input').value;
+  if (!pin) return;
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', pendingAdminAction, true);
+  xhr.setRequestHeader('X-Admin-Pin', pin);
+  xhr.setRequestHeader('HX-Request', 'true');
+  xhr.onload = function() {
+    if (xhr.status === 200 && xhr.responseText) {
+      document.getElementById('order-panel').innerHTML = xhr.responseText;
+      document.getElementById('admin-pin-overlay').style.display = 'none';
+      pendingAdminAction = null;
+      // Check if the item was actually removed (pin was correct)
+      if (typeof startOrderTimer === 'function') startOrderTimer();
+    } else {
+      document.getElementById('admin-pin-error').style.display = 'block';
+    }
+  };
+  xhr.send();
+}
+document.getElementById('admin-pin-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') submitAdminPin();
+});
+</script>
 {% endblock %}

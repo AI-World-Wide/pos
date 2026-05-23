@@ -6,6 +6,8 @@ from flask import Blueprint, Response, redirect, render_template, request, sessi
 
 from src.reports import (
     generate_csv,
+    generate_orders_csv,
+    get_all_orders_sheet,
     get_avg_items_per_order,
     get_credit_summary,
     get_current_shift_stats,
@@ -46,6 +48,7 @@ def index():
     trend = get_daily_trend(7)
     shift_stats = get_current_shift_stats()
     table_orders = get_table_orders_history(period)
+    orders_sheet = get_all_orders_sheet(period)
 
     return render_template("reports.html",
                            period=period,
@@ -60,7 +63,8 @@ def index():
                            credit=credit,
                            trend=trend,
                            shift_stats=shift_stats,
-                           table_orders=table_orders)
+                           table_orders=table_orders,
+                           orders_sheet=orders_sheet)
 
 
 @bp.get("/csv")
@@ -72,3 +76,43 @@ def export_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename=report_{period}.csv"},
     )
+
+
+@bp.get("/orders-csv")
+def export_orders_csv():
+    """Export the full orders sheet as CSV."""
+    period = request.args.get("period", "today")
+    csv_data = generate_orders_csv(period)
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=orders_{period}.csv"},
+    )
+
+
+@bp.post("/orders-email")
+def email_orders_sheet():
+    """Email the orders sheet CSV to configured recipients."""
+    from src.email_report import _send_gmail, _get_setting
+    from src.database import SessionLocal
+    period = request.form.get("period", "today")
+    csv_data = generate_orders_csv(period)
+
+    db = SessionLocal()
+    try:
+        recipients_str = _get_setting(db, "email_recipients")
+    finally:
+        db.close()
+
+    if not recipients_str:
+        from flask import flash
+        flash("No recipients configured", "error")
+        return redirect(url_for("reports.index", period=period))
+
+    recipients = [e.strip() for e in recipients_str.split(",") if e.strip()]
+    html = '<html dir="rtl"><body style="font-family:Arial;direction:rtl"><h2>سجل الطلبات</h2><p>مرفق ملف CSV بسجل الطلبات</p></body></html>'
+    result = _send_gmail(recipients, f"Cafe POS — Orders Sheet ({period})", html, csv_data)
+
+    from flask import flash
+    flash(result, "success" if "success" in result.lower() else "error")
+    return redirect(url_for("reports.index", period=period))

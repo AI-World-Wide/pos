@@ -55,8 +55,8 @@ class Item(Base):
     kitchen_station = Column(String, default="")  # '' / Bar / Shisha / Kitchen
     visible = Column(Integer, default=1)
     sort_order = Column(Integer, default=9999)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     category = relationship("Category", back_populates="items")
 
@@ -94,7 +94,7 @@ class Shift(Base):
     __tablename__ = "shifts"
 
     id = Column(Integer, primary_key=True)
-    opened_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    opened_at = Column(DateTime, nullable=False, default=datetime.now)
     closed_at = Column(DateTime, nullable=True)
     opened_by = Column(String)  # username
     closed_by = Column(String)
@@ -114,7 +114,7 @@ class Order(Base):
     order_number = Column(String, unique=True)  # e.g. 2026-05-20-0001
     table_id = Column(Integer, ForeignKey("floor_tables.id"), nullable=True)
     shift_id = Column(Integer, ForeignKey("shifts.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
     closed_at = Column(DateTime)
     status = Column(String, default="open")  # open / sent / settled / voided
     subtotal = Column(Float, default=0)
@@ -162,7 +162,7 @@ class PrintQueue(Base):
     status = Column(String, default="pending")  # pending / printed / failed
     attempts = Column(Integer, default=0)
     error_message = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
 
 class User(Base):
@@ -174,7 +174,7 @@ class User(Base):
     role = Column(String, nullable=False)  # admin / cashier / waiter
     pin_hash = Column(String, nullable=False)
     active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
 
 class Permission(Base):

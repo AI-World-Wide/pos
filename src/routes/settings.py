@@ -119,11 +119,16 @@ def save_email_settings():
         db.close()
 
 
+def _oauth_redirect_uri():
+    """Fixed redirect URI that matches Google Cloud Console config exactly."""
+    return "http://localhost:5000/settings/oauth-callback"
+
+
 @bp.get("/oauth-start")
 def oauth_start():
     """Redirect to Google OAuth2 consent screen."""
     from src.email_report import get_oauth_url
-    redirect_uri = url_for("settings.oauth_callback", _external=True)
+    redirect_uri = _oauth_redirect_uri()
     auth_url = get_oauth_url(redirect_uri)
     if not auth_url:
         flash("Gmail client ID not configured", "error")
@@ -141,7 +146,7 @@ def oauth_callback():
         return redirect(url_for("settings.index"))
 
     from src.email_report import exchange_code_for_tokens
-    redirect_uri = url_for("settings.oauth_callback", _external=True)
+    redirect_uri = _oauth_redirect_uri()
     try:
         tokens = exchange_code_for_tokens(code, redirect_uri)
         if "access_token" in tokens:
@@ -173,6 +178,16 @@ def oauth_disconnect():
 def test_email():
     from src.email_report import send_daily_report
     result = send_daily_report()
+    flash(result, "success" if "success" in result.lower() else "error")
+    return redirect(url_for("settings.index"))
+
+
+@bp.post("/email/send-report")
+def send_report():
+    """Send email report for a specific time period."""
+    from src.email_report import send_daily_report
+    period = request.form.get("period", "today")
+    result = send_daily_report(period)
     flash(result, "success" if "success" in result.lower() else "error")
     return redirect(url_for("settings.index"))
 

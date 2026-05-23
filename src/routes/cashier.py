@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime, date
 
-from flask import Blueprint, abort, render_template, request, session
+from flask import Blueprint, abort, jsonify, render_template, request, session
+from werkzeug.security import check_password_hash
 
 from src.database import get_session
-from src.models import Category, Item, Order, OrderLine
+from src.models import Category, Item, Order, OrderLine, User
 
 bp = Blueprint("cashier", __name__)
 
@@ -43,10 +44,16 @@ def _get_or_create_order(db) -> Order:
             order = None
     if order is None:
         table_id = session.pop("pending_table_id", None)
+
+        # Link to current open shift if one exists
+        from src.models import Shift
+        shift = db.query(Shift).filter(Shift.status == "open").order_by(Shift.opened_at.desc()).first()
+
         order = Order(
             order_number=_current_order_number(),
             status="open",
             table_id=table_id,
+            shift_id=shift.id if shift else None,
             cashier=session.get("username", "admin"),
         )
         db.add(order)
@@ -101,12 +108,16 @@ def index():
         # Load current order
         order_data = _get_order_view_data(db)
 
+        # Auto-pay flag from split partial pay flow
+        auto_pay = session.pop("auto_pay", False)
+
         return render_template(
             "cashier.html",
             categories=categories,
             items=items,
             active_cat_id=active_cat_id,
             order=order_data,
+            auto_pay=auto_pay,
         )
     finally:
         db.close()
@@ -173,7 +184,8 @@ def add_to_order(item_id: int):
 def adjust_qty(line_id: int, action: str):
     """HTMX: increment, decrement, or void a line.
 
-    Void/dec are admin-only (checked in template via session role).
+    Void/dec require admin PIN for non-admin users.
+    Admin PIN is passed via X-Admin-Pin header from the modal.
     """
     db = get_session()
     try:
@@ -185,16 +197,22 @@ def adjust_qty(line_id: int, action: str):
         if action == "inc":
             line.quantity += 1
             line.line_total = round(line.quantity * line.unit_price_inclusive, 2)
-        elif action == "dec":
-            if session.get("role") != "admin":
-                pass  # non-admin can't decrease
-            elif line.quantity > 1:
-                line.quantity -= 1
-                line.line_total = round(line.quantity * line.unit_price_inclusive, 2)
-            else:
-                line.voided = 1
-        elif action == "void":
-            if session.get("role") == "admin":
+        elif action in ("dec", "void"):
+            # Admin can do it directly; others need admin PIN
+            is_admin = session.get("role") == "admin"
+            if not is_admin:
+                admin_pin = request.headers.get("X-Admin-Pin", "")
+                if not admin_pin or not _verify_admin_pin(db, admin_pin):
+                    order_data = _get_order_view_data(db, order)
+                    return render_template("partials/order_panel.html", order=order_data)
+
+            if action == "dec":
+                if line.quantity > 1:
+                    line.quantity -= 1
+                    line.line_total = round(line.quantity * line.unit_price_inclusive, 2)
+                else:
+                    line.voided = 1
+            elif action == "void":
                 line.voided = 1
 
         _calc_totals(order)
@@ -203,6 +221,15 @@ def adjust_qty(line_id: int, action: str):
         return render_template("partials/order_panel.html", order=order_data)
     finally:
         db.close()
+
+
+def _verify_admin_pin(db, pin: str) -> bool:
+    """Check if the given PIN belongs to any active admin user."""
+    admins = db.query(User).filter(User.role == "admin", User.active == True).all()
+    for admin in admins:
+        if check_password_hash(admin.pin_hash, pin):
+            return True
+    return False
 
 
 @bp.post("/order/edit-price/<int:line_id>")
@@ -301,7 +328,7 @@ def settle_order():
             order.cash_received = order.total
             order.change_due = 0
         order.status = "settled"
-        order.closed_at = datetime.utcnow()
+        order.closed_at = datetime.now()
 
         # Mark any remaining unsent lines as sent
         for line in order.lines:

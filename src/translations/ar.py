@@ -170,6 +170,7 @@ T = {
     "perm_manage_users": "إدارة المستخدمين",
     "perm_manage_settings": "إدارة الإعدادات",
     "perm_manage_printers": "إدارة الطابعات",
+    "admin_pin_required": "أدخل رقم المدير السري",
 
     # Floor plan / Tables
     "floor_plan": "خريطة الطاولات",
@@ -232,6 +233,17 @@ T = {
     "repeat_items": "الأصناف المتكررة",
     "category_breakdown": "تفصيل الفئات",
     "daily_trend": "الاتجاه اليومي",
+    "orders_sheet": "سجل الطلبات",
+    "orders_sheet_desc": "جميع الطلبات",
+    "export_orders_csv": "تصدير السجل CSV",
+    "email_orders_sheet": "إرسال السجل بالبريد",
+    "status": "الحالة",
+    "status_open": "مفتوح",
+    "status_sent": "تم الإرسال",
+    "status_settled": "مدفوع",
+    "status_voided": "ملغي",
+    "open_time": "وقت الفتح",
+    "close_time": "وقت الإغلاق",
 
     # Email / OAuth
     "email_settings": "إعدادات البريد الإلكتروني",
@@ -253,6 +265,10 @@ T = {
     "include_hourly_breakdown": "تفصيل الساعات",
     "include_credit_summary": "ملخص الآجل",
     "send_test_email": "إرسال بريد تجريبي",
+    "send_report": "إرسال التقرير",
+    "send_report_for": "إرسال تقرير لفترة",
+    "last_week": "الأسبوع الماضي",
+    "last_month": "الشهر الماضي",
     "email_sent": "تم إرسال البريد",
     "email_failed": "فشل إرسال البريد",
 

@@ -22,6 +22,19 @@ def _date_range(period: str) -> tuple[datetime, datetime]:
     elif period == "month":
         start = today.replace(day=1)
         return datetime(start.year, start.month, start.day), datetime.now()
+    elif period == "last_month":
+        # First day of last month to last day of last month
+        first_this = today.replace(day=1)
+        last_prev = first_this - timedelta(days=1)
+        first_prev = last_prev.replace(day=1)
+        return datetime(first_prev.year, first_prev.month, first_prev.day), \
+               datetime(last_prev.year, last_prev.month, last_prev.day, 23, 59, 59)
+    elif period == "last_week":
+        # Monday-Sunday of last week
+        start = today - timedelta(days=today.weekday() + 7)
+        end = start + timedelta(days=6)
+        return datetime(start.year, start.month, start.day), \
+               datetime(end.year, end.month, end.day, 23, 59, 59)
     else:  # today
         return datetime(today.year, today.month, today.day), datetime.now()
 
@@ -298,49 +311,100 @@ def get_table_orders_history(period: str = "today") -> list[dict]:
             .order_by(Order.closed_at.desc())
             .all()
         )
-        result = []
-        for o in orders:
-            table_label = ""
-            area_name = ""
-            if o.table_id:
-                ft = db.get(FloorTable, o.table_id)
-                if ft:
-                    table_label = str(ft.number)
-                    area = db.get(Area, ft.area_id)
-                    area_name = area.name_ar if area else ""
-
-            items = [
-                {"name_ar": l.item_name_ar, "qty": l.quantity,
-                 "unit_price": l.unit_price_inclusive, "total": l.line_total}
-                for l in o.lines if not l.voided
-            ]
-            duration = ""
-            if o.created_at and o.closed_at:
-                diff = int((o.closed_at - o.created_at).total_seconds())
-                h, m = divmod(diff // 60, 60)
-                duration = f"{h}:{m:02d}"
-
-            result.append({
-                "id": o.id,
-                "order_number": o.order_number,
-                "table_label": table_label,
-                "area_name": area_name,
-                "cashier": o.cashier or "",
-                "created_at": o.created_at.strftime("%H:%M") if o.created_at else "",
-                "closed_at": o.closed_at.strftime("%H:%M") if o.closed_at else "",
-                "duration": duration,
-                "subtotal": o.subtotal or 0,
-                "vat": o.vat_amount or 0,
-                "total": o.total or 0,
-                "method": o.payment_method or "",
-                "cash_received": o.cash_received or 0,
-                "change": o.change_due or 0,
-                "items": items,
-                "item_count": sum(l.quantity for l in o.lines if not l.voided),
-            })
-        return result
+        return _build_orders_list(db, orders)
     finally:
         db.close()
+
+
+def get_all_orders_sheet(period: str = "today") -> list[dict]:
+    """All orders (open, sent, settled, voided) for the sheet view.
+
+    Default: from the last open shift time until now (or from start of day).
+    Also supports standard periods.
+    """
+    from datetime import datetime
+    start, end = _date_range(period)
+    db = SessionLocal()
+    try:
+        orders = (
+            db.query(Order)
+            .filter(Order.created_at.between(start, end))
+            .order_by(Order.created_at.desc())
+            .all()
+        )
+        return _build_orders_list(db, orders, include_status=True)
+    finally:
+        db.close()
+
+
+def _build_orders_list(db, orders, include_status: bool = False) -> list[dict]:
+    """Shared helper to build order list dicts."""
+    from datetime import datetime
+    result = []
+    for o in orders:
+        table_label = ""
+        area_name = ""
+        if o.table_id:
+            ft = db.get(FloorTable, o.table_id)
+            if ft:
+                table_label = str(ft.number)
+                area = db.get(Area, ft.area_id)
+                area_name = area.name_ar if area else ""
+
+        items = [
+            {"name_ar": l.item_name_ar, "qty": l.quantity,
+             "unit_price": l.unit_price_inclusive, "total": l.line_total}
+            for l in o.lines if not l.voided
+        ]
+        duration = ""
+        if o.created_at and o.closed_at:
+            diff = int((o.closed_at - o.created_at).total_seconds())
+            h, m = divmod(diff // 60, 60)
+            duration = f"{h}:{m:02d}"
+        elif o.created_at:
+            diff = int((datetime.now() - o.created_at).total_seconds())
+            h, m = divmod(diff // 60, 60)
+            duration = f"{h}:{m:02d}"
+
+        entry = {
+            "id": o.id,
+            "order_number": o.order_number,
+            "table_label": table_label,
+            "area_name": area_name,
+            "cashier": o.cashier or "",
+            "created_at": o.created_at.strftime("%H:%M") if o.created_at else "",
+            "created_date": o.created_at.strftime("%d/%m/%Y") if o.created_at else "",
+            "closed_at": o.closed_at.strftime("%H:%M") if o.closed_at else "",
+            "duration": duration,
+            "subtotal": o.subtotal or 0,
+            "vat": o.vat_amount or 0,
+            "total": o.total or 0,
+            "method": o.payment_method or "",
+            "cash_received": o.cash_received or 0,
+            "change": o.change_due or 0,
+            "items": items,
+            "item_count": sum(l.quantity for l in o.lines if not l.voided),
+        }
+        if include_status:
+            entry["status"] = o.status
+        result.append(entry)
+    return result
+
+
+def generate_orders_csv(period: str = "today") -> str:
+    """Generate detailed CSV of all orders for export."""
+    orders = get_all_orders_sheet(period)
+    lines = ["Order Number,Date,Table,Area,Cashier,Status,Open,Close,Duration,Subtotal,VAT,Total,Payment,Items"]
+    for o in orders:
+        items_str = "; ".join(f"{i['name_ar']} x{i['qty']}" for i in o["items"])
+        lines.append(
+            f"{o['order_number']},{o['created_date']},"
+            f"{o['table_label']},{o['area_name']},{o['cashier']},"
+            f"{o.get('status', 'settled')},{o['created_at']},{o['closed_at']},"
+            f"{o['duration']},{o['subtotal']:.2f},{o['vat']:.2f},{o['total']:.2f},"
+            f"{o['method']},{items_str}"
+        )
+    return "\n".join(lines)
 
 
 def generate_csv(period: str = "today") -> str:

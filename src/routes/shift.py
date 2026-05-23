@@ -105,7 +105,7 @@ def close_day():
             Order.shift_id == current.id, Order.status == "settled"
         ).all()
 
-        current.closed_at = datetime.utcnow()
+        current.closed_at = datetime.now()
         current.closed_by = session.get("username")
         current.closing_cash = closing_cash
         current.total_sales = sum(o.total for o in orders)

@@ -83,7 +83,7 @@ def render_kitchen_ticket(order: Order, db, line_ids: list[int] | None = None) -
     y += 40
 
     # Order info
-    now = datetime.utcnow()
+    now = datetime.now()
     draw_center(f"{order.order_number}  |  {now.strftime('%H:%M')}", font_normal, y)
     y += 30
 

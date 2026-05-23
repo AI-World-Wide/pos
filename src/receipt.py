@@ -145,7 +145,7 @@ def render_receipt(order: Order, db) -> Image.Image:
     y = draw_line(y)
 
     # Date/time
-    now = order.closed_at or datetime.utcnow()
+    now = order.closed_at or datetime.now()
     date_str = now.strftime("%d/%m/%Y  %I:%M %p")
     draw_row(f"{T['receipt_date']}: {date_str}", "", font_normal, y)
     y += 25

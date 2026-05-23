@@ -261,15 +261,18 @@
   font-size: 14px;
 }
 
-.move-dropdown { flex: 1; }
+.order-move-bar {
+  padding: 6px 10px;
+  background: #2c3e50;
+}
 .move-select {
-  height: 36px;
+  height: 38px;
   border: 1px solid #556;
   border-radius: 6px;
   background: #2d2d4a;
   color: #fff;
   font-family: 'Cairo', sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   padding: 0 8px;
   width: 100%;
 }
@@ -455,3 +458,9 @@
 }
 .held-item__num { font-size: 16px; font-weight: 700; }
 .held-item__meta { font-size: 14px; color: #6b6b6b; display: block; }
+
+/* Admin PIN modal */
+.modal-box {
+  background: #fff;
+  border-radius: 16px;
+}
