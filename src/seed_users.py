@@ -41,7 +41,7 @@ ROLE_DEFAULTS = {
     "admin":   {k: True for k in PERMISSION_KEYS},
     "cashier": {
         "take_order": True, "send_to_kitchen": True, "take_payment": True,
-        "void_line": True, "apply_discount": False, "view_reports": True,
+        "void_line": True, "apply_discount": False, "view_reports": False,
         "edit_items": False, "manage_users": False, "manage_settings": False,
         "manage_printers": False,
     },

@@ -14,10 +14,10 @@
   </div>
   <nav class="pos-topbar__nav">
     <a class="pos-topbar__btn pos-topbar__btn--tables" href="{{ url_for('tables.floor_plan') }}">{{ t.tables }}</a>
-    {% if session.get('role') == 'admin' %}
+    {% if session.get('role') in ['admin', 'cashier'] %}
       <a class="pos-topbar__btn" href="{{ url_for('shift.index') }}">{{ t.shift }}</a>
     {% endif %}
-    {% if session.get('role') == 'admin' or session.get('can_view_reports') %}
+    {% if session.get('role') == 'admin' %}
       <a class="pos-topbar__btn" href="{{ url_for('reports.index') }}">{{ t.reports }}</a>
     {% endif %}
     {% if session.get('role') == 'admin' %}
@@ -82,6 +82,30 @@
   </div>
 </div>
 
+<!-- Price-edit overlay (cashier/waiter) — needs new price + admin PIN -->
+<div id="price-edit-overlay" class="modal-overlay" style="display:none"
+     onclick="if(event.target===this){this.style.display='none'}">
+  <div class="modal-box" style="max-width:360px;padding:24px;text-align:center" onclick="event.stopPropagation()">
+    <h3 style="margin-bottom:8px;font-size:20px">{{ t.edit_price }}</h3>
+    <div id="price-edit-item" style="color:#666;margin-bottom:14px;font-size:15px"></div>
+    <label style="display:block;text-align:right;font-size:13px;margin-bottom:4px">{{ t.new_price }}</label>
+    <input type="number" id="price-edit-input" class="form-input"
+           step="0.01" min="0"
+           style="font-size:24px;text-align:center;height:52px;margin-bottom:12px">
+    <label style="display:block;text-align:right;font-size:13px;margin-bottom:4px">{{ t.admin_pin_required }}</label>
+    <input type="password" id="price-edit-pin" class="form-input"
+           inputmode="numeric" pattern="[0-9]*" maxlength="6"
+           placeholder="****" style="font-size:24px;text-align:center;height:52px;margin-bottom:14px">
+    <div style="display:flex;gap:10px">
+      <button class="btn btn--primary" style="flex:1;min-height:48px;font-size:18px"
+              onclick="submitPriceEdit()">{{ t.confirm }}</button>
+      <button class="btn btn--secondary" style="flex:1;min-height:48px;font-size:18px"
+              onclick="document.getElementById('price-edit-overlay').style.display='none'">{{ t.cancel }}</button>
+    </div>
+    <div id="price-edit-error" style="color:#e74c3c;margin-top:10px;display:none">{{ t.wrong_pin }}</div>
+  </div>
+</div>
+
 <script src="{{ url_for('static', filename='js/htmx.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/cashier.js') }}"></script>
 {% if auto_pay %}
@@ -127,6 +151,48 @@ function submitAdminPin() {
 }
 document.getElementById('admin-pin-input').addEventListener('keydown', function(e) {
   if (e.key === 'Enter') submitAdminPin();
+});
+
+// --- Per-unit price edit (cashier/waiter): asks for new price + admin PIN ---
+var priceEditLineId = null;
+function showPriceEditModal(lineId, currentPrice, itemName) {
+  priceEditLineId = lineId;
+  var overlay = document.getElementById('price-edit-overlay');
+  document.getElementById('price-edit-item').textContent = itemName || '';
+  var priceInput = document.getElementById('price-edit-input');
+  priceInput.value = currentPrice.toFixed(2);
+  document.getElementById('price-edit-pin').value = '';
+  document.getElementById('price-edit-error').style.display = 'none';
+  overlay.style.display = 'flex';
+  setTimeout(function(){ priceInput.focus(); priceInput.select(); }, 100);
+}
+function submitPriceEdit() {
+  if (priceEditLineId == null) return;
+  var price = document.getElementById('price-edit-input').value;
+  var pin = document.getElementById('price-edit-pin').value;
+  if (price === '' || !pin) return;
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', '/order/edit-price/' + priceEditLineId, true);
+  xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+  xhr.setRequestHeader('X-Admin-Pin', pin);
+  xhr.setRequestHeader('HX-Request', 'true');
+  xhr.onload = function() {
+    if (xhr.status === 200 && xhr.responseText) {
+      document.getElementById('order-panel').innerHTML = xhr.responseText;
+      document.getElementById('price-edit-overlay').style.display = 'none';
+      priceEditLineId = null;
+      if (typeof startOrderTimer === 'function') startOrderTimer();
+    } else {
+      document.getElementById('price-edit-error').style.display = 'block';
+    }
+  };
+  xhr.send('price=' + encodeURIComponent(price));
+}
+document.getElementById('price-edit-pin').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') submitPriceEdit();
+});
+document.getElementById('price-edit-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') document.getElementById('price-edit-pin').focus();
 });
 </script>
 {% endblock %}

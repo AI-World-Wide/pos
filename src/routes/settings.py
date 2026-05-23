@@ -301,3 +301,25 @@ def test_print():
     except Exception as e:
         flash(f"Print error: {e}", "error")
     return redirect(url_for("settings.index"))
+
+
+@bp.post("/test-drawer")
+def test_drawer():
+    """Fire the cash-drawer kick on the configured drawer printer (or the
+    receipt printer if no dedicated drawer printer is mapped)."""
+    try:
+        from src.printer import (
+            _get_printer_name,
+            _get_printer_name_strict,
+            _send_raw_to_printer,
+            _kick_drawer_bytes,
+        )
+        printer_name = _get_printer_name_strict("cash_drawer") or _get_printer_name("receipt")
+        if not printer_name:
+            flash("No printer configured", "error")
+            return redirect(url_for("settings.index"))
+        _send_raw_to_printer(printer_name, _kick_drawer_bytes())
+        flash("Drawer kick sent", "success")
+    except Exception as e:
+        flash(f"Drawer error: {e}", "error")
+    return redirect(url_for("settings.index"))

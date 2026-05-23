@@ -60,7 +60,7 @@ def index():
 
 @bp.post("/open")
 def open_day():
-    if session.get("role") != "admin":
+    if session.get("role") not in ("admin", "cashier"):
         return redirect(url_for("shift.index"))
     db = get_session()
     try:
@@ -84,7 +84,7 @@ def open_day():
 
 @bp.post("/close")
 def close_day():
-    if session.get("role") != "admin":
+    if session.get("role") not in ("admin", "cashier"):
         return redirect(url_for("shift.index"))
     db = get_session()
     try:
@@ -92,22 +92,21 @@ def close_day():
         if not current:
             return redirect(url_for("shift.index"))
 
-        # Check for open tables
-        open_tables = db.query(FloorTable).filter(FloorTable.status == "occupied").count()
-        if open_tables > 0:
-            flash("cannot_close_open_tables", "error")
-            return redirect(url_for("shift.index"))
+        # Closing the day no longer blocks on occupied tables and no longer
+        # asks for closing cash — by design. Tables can keep their open
+        # orders across day boundaries and will be settled whenever the
+        # customer pays. The order's original creation date is what gets
+        # attributed to the sales day in reports.
 
-        closing_cash = float(request.form.get("closing_cash", 0))
-
-        # Calculate shift totals
+        # Calculate shift totals from orders that were CREATED inside this
+        # shift, regardless of when they settle.
         orders = db.query(Order).filter(
             Order.shift_id == current.id, Order.status == "settled"
         ).all()
 
         current.closed_at = datetime.now()
         current.closed_by = session.get("username")
-        current.closing_cash = closing_cash
+        current.closing_cash = 0
         current.total_sales = sum(o.total for o in orders)
         current.total_orders = len(orders)
         current.total_vat = sum(o.vat_amount for o in orders)

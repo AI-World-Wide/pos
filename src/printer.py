@@ -72,6 +72,22 @@ def _get_printer_name(purpose: str = "receipt") -> str | None:
     return cfg.get("printer", "default_name", fallback="Bar")
 
 
+def _get_printer_name_strict(purpose: str) -> str | None:
+    """Like _get_printer_name but returns None if no printer is mapped for
+    the purpose — no fallback to the default printer. Used for the cash
+    drawer so the kick doesn't accidentally fire on the wrong device."""
+    db = SessionLocal()
+    try:
+        printer = (
+            db.query(Printer)
+            .filter(Printer.purpose == purpose, Printer.enabled == True)
+            .first()
+        )
+        return printer.name if printer else None
+    finally:
+        db.close()
+
+
 def _send_raw_to_printer(printer_name: str, data: bytes) -> None:
     """Send raw bytes to a Windows printer via the spooler."""
     import win32print
@@ -193,10 +209,24 @@ def _attempt_print(pq_id: int, line_ids: list[int] | None = None) -> None:
             data += b'\n\n\n'
             data += _build_cut_command()
 
-            if pq.type == "receipt":
-                data += _kick_drawer_bytes()
+            # Kick the cash drawer only for cash payments. Card / credit /
+            # other methods must NOT open the drawer.
+            kick_drawer = (
+                pq.type == "receipt"
+                and (order.payment_method or "cash").lower() == "cash"
+            )
+            kick_data = _kick_drawer_bytes() if kick_drawer else b""
 
-            _send_raw_to_printer(printer_name, data)
+            # If a dedicated "cash_drawer" printer is configured, fire the
+            # kick to that printer separately; otherwise piggy-back on the
+            # receipt printer.
+            drawer_printer = _get_printer_name_strict("cash_drawer") if kick_drawer else None
+            if drawer_printer and drawer_printer != printer_name:
+                _send_raw_to_printer(printer_name, data)
+                _send_raw_to_printer(drawer_printer, kick_data)
+            else:
+                _send_raw_to_printer(printer_name, data + kick_data)
+
             pq.status = "printed"
             pq.attempts += 1
             db.commit()

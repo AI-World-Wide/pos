@@ -29,7 +29,7 @@ bp = Blueprint("reports", __name__, url_prefix="/reports")
 def _check_access():
     if not session.get("username"):
         return redirect(url_for("auth.login_page"))
-    if session.get("role") != "admin" and not session.get("can_view_reports"):
+    if session.get("role") != "admin":
         return redirect(url_for("cashier.index"))
 
 

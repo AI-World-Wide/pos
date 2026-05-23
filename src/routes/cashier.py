@@ -234,24 +234,63 @@ def _verify_admin_pin(db, pin: str) -> bool:
 
 @bp.post("/order/edit-price/<int:line_id>")
 def edit_line_price(line_id: int):
-    """HTMX: admin edits the unit price of a single order line."""
-    if session.get("role") != "admin":
-        abort(403)
+    """HTMX: edit the price of ONE unit on a single order line.
+
+    Per-occurrence pricing: if the line has qty > 1, one unit is split off
+    into a new line at the new price; the original line keeps the original
+    price with quantity decremented by 1. If qty == 1 the price is updated
+    in place.
+
+    Admins can do this directly; non-admin users must pass a valid admin
+    PIN via the X-Admin-Pin header (set by the price-edit overlay).
+    """
     db = get_session()
     try:
         line = db.get(OrderLine, line_id)
         if not line:
             abort(404)
+        order = db.get(Order, line.order_id)
+
+        is_admin = session.get("role") == "admin"
+        if not is_admin:
+            admin_pin = request.headers.get("X-Admin-Pin", "")
+            if not admin_pin or not _verify_admin_pin(db, admin_pin):
+                # Return 403 so the modal can show "wrong PIN" feedback
+                abort(403)
+
         new_price = request.form.get("price", type=float)
-        if new_price is not None and new_price >= 0:
-            line.unit_price_inclusive = round(new_price, 2)
-            line.line_total = round(line.quantity * line.unit_price_inclusive, 2)
-            order = db.get(Order, line.order_id)
-            _calc_totals(order)
-            db.commit()
+        if new_price is None or new_price < 0:
+            abort(400)
+        new_price = round(new_price, 2)
+
+        # No-op if the price didn't actually change.
+        if abs(new_price - (line.unit_price_inclusive or 0)) < 0.005:
             order_data = _get_order_view_data(db, order)
             return render_template("partials/order_panel.html", order=order_data)
-        abort(400)
+
+        if line.quantity > 1:
+            # Split off one unit into a new line at the new price.
+            new_line = OrderLine(
+                order_id=line.order_id,
+                item_id=line.item_id,
+                item_name_ar=line.item_name_ar,
+                quantity=1,
+                unit_price_inclusive=new_price,
+                line_total=new_price,
+                voided=0,
+                sent_to_kitchen=line.sent_to_kitchen,
+            )
+            db.add(new_line)
+            line.quantity -= 1
+            line.line_total = round(line.quantity * line.unit_price_inclusive, 2)
+        else:
+            line.unit_price_inclusive = new_price
+            line.line_total = new_price
+
+        _calc_totals(order)
+        db.commit()
+        order_data = _get_order_view_data(db, order)
+        return render_template("partials/order_panel.html", order=order_data)
     finally:
         db.close()
 
@@ -444,6 +483,21 @@ def _get_order_view_data(db, order=None) -> dict:
         if order_id:
             order = db.get(Order, order_id)
     if order is None or order.status not in ("open", "sent"):
+        # No active order yet — but if a table was opened (pending_table_id),
+        # still surface its label so the cashier knows which table they're on
+        # before the first item is added.
+        pending_id = session.get("pending_table_id")
+        table_info = None
+        if pending_id:
+            from src.models import FloorTable, Area
+            ft = db.get(FloorTable, pending_id)
+            if ft:
+                area = db.get(Area, ft.area_id)
+                table_info = {
+                    "table_id": ft.id,
+                    "number": ft.number,
+                    "area_name": area.name_ar if area else "",
+                }
         return {
             "id": None,
             "order_number": "",
@@ -452,8 +506,8 @@ def _get_order_view_data(db, order=None) -> dict:
             "vat_amount": 0,
             "total": 0,
             "status": "open",
-            "table_id": None,
-            "table_info": None,
+            "table_id": pending_id,
+            "table_info": table_info,
             "move_targets": [],
             "opened_at": None,
         }

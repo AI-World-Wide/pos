@@ -46,7 +46,7 @@ def get_summary(period: str = "today") -> dict:
     try:
         orders = (
             db.query(Order)
-            .filter(Order.status == "settled", Order.closed_at.between(start, end))
+            .filter(Order.status == "settled", Order.created_at.between(start, end))
             .all()
         )
         total_sales = sum(o.total for o in orders)
@@ -78,7 +78,7 @@ def get_top_items(period: str = "today", limit: int = 10) -> list[dict]:
             .join(Order, Order.id == OrderLine.order_id)
             .filter(
                 Order.status == "settled",
-                Order.closed_at.between(start, end),
+                Order.created_at.between(start, end),
                 OrderLine.voided == 0,
             )
             .group_by(OrderLine.item_name_ar)
@@ -110,7 +110,7 @@ def get_sales_by_category(period: str = "today") -> list[dict]:
             .join(Order, Order.id == OrderLine.order_id)
             .filter(
                 Order.status == "settled",
-                Order.closed_at.between(start, end),
+                Order.created_at.between(start, end),
                 OrderLine.voided == 0,
             )
             .group_by(Category.name_ar)
@@ -132,12 +132,12 @@ def get_sales_by_hour(period: str = "today") -> list[dict]:
     try:
         rows = (
             db.query(
-                func.strftime("%H", Order.closed_at).label("hour"),
+                func.strftime("%H", Order.created_at).label("hour"),
                 func.count(Order.id).label("count"),
                 func.sum(Order.total).label("revenue"),
             )
-            .filter(Order.status == "settled", Order.closed_at.between(start, end))
-            .group_by(func.strftime("%H", Order.closed_at))
+            .filter(Order.status == "settled", Order.created_at.between(start, end))
+            .group_by(func.strftime("%H", Order.created_at))
             .order_by("hour")
             .all()
         )
@@ -160,7 +160,7 @@ def get_sales_by_cashier(period: str = "today") -> list[dict]:
                 func.count(Order.id).label("count"),
                 func.sum(Order.total).label("revenue"),
             )
-            .filter(Order.status == "settled", Order.closed_at.between(start, end))
+            .filter(Order.status == "settled", Order.created_at.between(start, end))
             .group_by(Order.cashier)
             .order_by(func.sum(Order.total).desc())
             .all()
@@ -180,7 +180,7 @@ def get_payment_breakdown(period: str = "today") -> dict:
     try:
         orders = (
             db.query(Order)
-            .filter(Order.status == "settled", Order.closed_at.between(start, end))
+            .filter(Order.status == "settled", Order.created_at.between(start, end))
             .all()
         )
         cash = sum(o.total for o in orders if o.payment_method == "cash")
@@ -201,7 +201,7 @@ def get_avg_items_per_order(period: str = "today") -> float:
     try:
         orders = (
             db.query(Order)
-            .filter(Order.status == "settled", Order.closed_at.between(start, end))
+            .filter(Order.status == "settled", Order.created_at.between(start, end))
             .all()
         )
         if not orders:
@@ -265,7 +265,7 @@ def get_daily_trend(days: int = 7) -> list[dict]:
             end = datetime(d.year, d.month, d.day, 23, 59, 59)
             orders = (
                 db.query(Order)
-                .filter(Order.status == "settled", Order.closed_at.between(start, end))
+                .filter(Order.status == "settled", Order.created_at.between(start, end))
                 .all()
             )
             revenue = sum(o.total for o in orders)
@@ -307,8 +307,8 @@ def get_table_orders_history(period: str = "today") -> list[dict]:
     try:
         orders = (
             db.query(Order)
-            .filter(Order.status == "settled", Order.closed_at.between(start, end))
-            .order_by(Order.closed_at.desc())
+            .filter(Order.status == "settled", Order.created_at.between(start, end))
+            .order_by(Order.created_at.desc())
             .all()
         )
         return _build_orders_list(db, orders)
@@ -414,8 +414,8 @@ def generate_csv(period: str = "today") -> str:
     try:
         orders = (
             db.query(Order)
-            .filter(Order.status == "settled", Order.closed_at.between(start, end))
-            .order_by(Order.closed_at)
+            .filter(Order.status == "settled", Order.created_at.between(start, end))
+            .order_by(Order.created_at)
             .all()
         )
         lines = ["Order Number,Date,Cashier,Subtotal,VAT,Total,Payment Method"]

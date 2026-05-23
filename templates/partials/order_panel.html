@@ -35,7 +35,13 @@
                 <small class="line-subtotal">= {{ "%.2f"|format(l.line_total) }}</small>
               {% endif %}
             {% else %}
-              {{ "%.2f"|format(l.line_total) }}
+              <button type="button" class="price-edit-btn"
+                      onclick="showPriceEditModal({{ l.id }}, {{ '%.2f'|format(l.unit_price) }}, {{ l.name_ar|tojson }})">
+                {{ "%.2f"|format(l.unit_price) }}
+              </button>
+              {% if l.qty > 1 %}
+                <small class="line-subtotal">× {{ l.qty }} = {{ "%.2f"|format(l.line_total) }}</small>
+              {% endif %}
             {% endif %}
           </span>
         </div>

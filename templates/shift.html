@@ -23,7 +23,7 @@
       </div>
     </div>
 
-    {% if live_stats %}
+    {% if live_stats and session.get('role') == 'admin' %}
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-card__value">{{ t.currency }} {{ "%.2f"|format(live_stats.total_sales) }}</div>
@@ -48,17 +48,9 @@
     </div>
     {% endif %}
 
-    {% if session.get('role') == 'admin' %}
+    {% if session.get('role') in ['admin', 'cashier'] %}
     <form method="post" action="{{ url_for('shift.close_day') }}" style="margin-top:16px">
-      <div class="form-group" style="max-width:300px">
-        <label>{{ t.closing_cash }}</label>
-        <input class="form-input" name="closing_cash" type="number" step="0.01" value="0" required>
-      </div>
-      {% if open_tables > 0 %}
-        <p style="color:#e74c3c;margin-bottom:12px">{{ t.cannot_close_open_tables }} ({{ open_tables }})</p>
-      {% endif %}
-      <button type="submit" class="btn btn--danger" {% if open_tables > 0 %}disabled{% endif %}
-              onclick="return confirm('{{ t.confirm_close }}?')">
+      <button type="submit" class="btn btn--danger" style="font-size:20px;min-height:54px;padding:0 32px">
         {{ t.close_day }}
       </button>
     </form>
@@ -69,7 +61,7 @@
   <!-- Day is CLOSED — open new shift -->
   <div class="card" style="border-right:5px solid #e74c3c">
     <h2 style="font-size:22px;color:#e74c3c;margin-bottom:16px">{{ t.day_is_closed }}</h2>
-    {% if session.get('role') == 'admin' %}
+    {% if session.get('role') in ['admin', 'cashier'] %}
     <form method="post" action="{{ url_for('shift.open_day') }}">
       <div class="form-group" style="max-width:300px">
         <label>{{ t.opening_cash }}</label>
@@ -83,8 +75,8 @@
   </div>
 {% endif %}
 
-<!-- Past shifts -->
-{% if past_shifts %}
+<!-- Past shifts — admin only -->
+{% if past_shifts and session.get('role') == 'admin' %}
 <h2 style="font-size:20px;margin:24px 0 12px">{{ t.shift_summary }}</h2>
 <table class="data-table">
   <thead>
@@ -95,7 +87,6 @@
       <th>{{ t.shift_orders }}</th>
       <th>{{ t.vat_collected }}</th>
       <th>{{ t.opening_cash }}</th>
-      <th>{{ t.closing_cash }}</th>
     </tr>
   </thead>
   <tbody>
@@ -107,7 +98,6 @@
       <td>{{ s.total_orders }}</td>
       <td>{{ t.currency }} {{ "%.2f"|format(s.total_vat) }}</td>
       <td>{{ "%.2f"|format(s.opening_cash) }}</td>
-      <td>{{ "%.2f"|format(s.closing_cash) }}</td>
     </tr>
     {% endfor %}
   </tbody>

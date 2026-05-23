@@ -135,6 +135,9 @@ T = {
     "printer_receipt": "إيصال",
     "printer_kitchen": "مطبخ",
     "printer_shisha": "شيشة",
+    "printer_cash_drawer": "درج النقد",
+    "test_drawer": "اختبار درج النقد",
+    "cash_drawer_hint": "يُفتح الدرج تلقائياً عند الدفع نقداً فقط — لا يُفتح مع البطاقة",
     "discover_printers": "البحث عن الطابعات",
     "no_printers": "لم يتم العثور على طابعات",
     "kick_code": "كود فتح الدرج",
@@ -171,6 +174,8 @@ T = {
     "perm_manage_settings": "إدارة الإعدادات",
     "perm_manage_printers": "إدارة الطابعات",
     "admin_pin_required": "أدخل رقم المدير السري",
+    "edit_price": "تعديل السعر",
+    "new_price": "السعر الجديد",
 
     # Floor plan / Tables
     "floor_plan": "خريطة الطاولات",
