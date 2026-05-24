@@ -137,7 +137,6 @@ def render_receipt(order: Order, db) -> Image.Image:
     h = 40  # top padding
     h += 52  # cafe name (Arabic)
     h += 38  # cafe name (English)
-    h += 34  # TRN
     h += 10 + 2  # separator
     h += 38 * 4  # date, order number, table, cashier
     h += 10 + 2  # separator
@@ -187,10 +186,6 @@ def render_receipt(order: Order, db) -> Image.Image:
     if cafe_name_en:
         draw_center(cafe_name_en, font_header, y)
         y += 38
-
-    # TRN
-    draw_center(f"TRN: {trn}", font_small, y)
-    y += 34
 
     y = draw_line(y)
 
