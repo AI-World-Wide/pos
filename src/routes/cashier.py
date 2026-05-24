@@ -86,7 +86,21 @@ def _apply_vat(base: float):
 
 
 def _calc_totals(order: Order) -> None:
-    """Recalculate order totals — 5% VAT added on top of item prices."""
+    """Recalculate order totals — 5% VAT added on top of item prices.
+
+    Flush pending changes and reload the lines collection first, so a line
+    that was just added (db.add) in the same request is included. Without
+    this the cached `order.lines` is stale and the total lags one item
+    behind.
+    """
+    from sqlalchemy.orm import object_session
+    sess = object_session(order)
+    if sess is not None:
+        try:
+            sess.flush()
+            sess.expire(order, ["lines"])
+        except Exception:
+            pass
     base = sum(l.line_total for l in order.lines if not l.voided)
     order.subtotal, order.vat_amount, order.total = _apply_vat(base)
 

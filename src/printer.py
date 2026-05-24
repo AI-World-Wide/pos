@@ -251,24 +251,20 @@ def _attempt_print(pq_id: int, line_ids: list[int] | None = None) -> None:
             data += b'\n\n\n'
             data += _build_cut_command()
 
-            # Kick the cash drawer only for cash payments. Card / credit /
-            # other methods must NOT open the drawer.
+            # Kick the cash drawer only for cash payments. The drawer is
+            # wired to the receipt printer's drawer port, so the pulse is
+            # appended to the receipt and sent to the SAME (receipt) printer.
+            # (Always riding the receipt printer avoids the earlier
+            # regression where a stray cash_drawer mapping diverted the
+            # pulse to the wrong device.)
             kick_drawer = (
                 pq.type == "receipt"
                 and (order.payment_method or "cash").lower() == "cash"
             )
-            kick_data = _kick_drawer_bytes() if kick_drawer else b""
+            if kick_drawer:
+                data += _kick_drawer_bytes()
 
-            # If a dedicated "cash_drawer" printer is configured, fire the
-            # kick to that printer separately; otherwise piggy-back on the
-            # receipt printer.
-            drawer_printer = _get_printer_name_strict("cash_drawer") if kick_drawer else None
-            if drawer_printer and drawer_printer != printer_name:
-                _send_raw_to_printer(printer_name, data)
-                # Init the drawer printer before the pulse.
-                _send_raw_to_printer(drawer_printer, b'\x1b\x40' + kick_data)
-            else:
-                _send_raw_to_printer(printer_name, data + kick_data)
+            _send_raw_to_printer(printer_name, data)
 
             pq.status = "printed"
             pq.attempts += 1

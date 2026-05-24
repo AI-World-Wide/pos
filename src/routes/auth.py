@@ -55,6 +55,8 @@ def login_submit():
         session["can_manage_settings"] = perms.get("manage_settings", False)
         session["can_take_payment"] = perms.get("take_payment", False)
         session["can_void_line"] = perms.get("void_line", False)
+        session["can_send_to_kitchen"] = perms.get("send_to_kitchen", True)
+        session["can_take_order"] = perms.get("take_order", True)
 
         # Default landing page is the floor-plan / tables view.
         return redirect(url_for("tables.floor_plan"))

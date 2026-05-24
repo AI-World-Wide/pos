@@ -135,12 +135,16 @@
           hx-post="{{ url_for('cashier.cancel_order') }}"
           hx-target="#order-panel" hx-swap="innerHTML"
           hx-confirm="هل أنت متأكد من إلغاء الطلب؟">{{ t.cancel }}</button>
+  {% if session.get('role') == 'admin' or session.get('can_send_to_kitchen', True) %}
   <button class="action-btn action-btn--send"
           hx-post="{{ url_for('cashier.send_to_kitchen') }}"
           hx-target="#order-panel" hx-swap="innerHTML">{{ t.send }}</button>
+  {% endif %}
+  {% if session.get('role') == 'admin' or session.get('can_take_payment') %}
   <button class="action-btn action-btn--pay"
           hx-post="{{ url_for('cashier.pay_order') }}"
           hx-target="#modal-overlay"
           hx-swap="innerHTML"
           onclick="document.getElementById('modal-overlay').style.display='flex'">{{ t.pay }}</button>
+  {% endif %}
 </div>
