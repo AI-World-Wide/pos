@@ -56,7 +56,8 @@ def login_submit():
         session["can_take_payment"] = perms.get("take_payment", False)
         session["can_void_line"] = perms.get("void_line", False)
 
-        return redirect(url_for("cashier.index"))
+        # Default landing page is the floor-plan / tables view.
+        return redirect(url_for("tables.floor_plan"))
     finally:
         db.close()
 

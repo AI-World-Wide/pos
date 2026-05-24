@@ -77,6 +77,8 @@ def init_db() -> None:
         seed_areas_and_tables(session)
         session.commit()
 
+    _seed_printers()
+
     # Auto-import items from seed XLSX if the items table is empty
     with SessionLocal() as session:
         if session.query(Item).count() == 0:
@@ -98,6 +100,7 @@ def _run_migrations() -> None:
     wanted = [
         ("order_lines", "note", "TEXT"),
         ("orders", "notes", "TEXT"),
+        ("print_queue", "line_ids", "TEXT"),
     ]
     try:
         with engine.begin() as conn:
@@ -112,6 +115,58 @@ def _run_migrations() -> None:
                     logger.info("Migration: added %s.%s", table, column)
     except Exception as e:
         logger.error("Migration failed: %s", e)
+
+
+def _seed_printers() -> None:
+    """Auto-map the cafe's printers on first run (empty printers table).
+
+    Reads the [printers] section of config.ini and creates one Printer row
+    per station so the operator doesn't have to wire anything after deploy.
+    Only runs when the table is empty, so it never overrides mappings the
+    admin later sets in Settings.
+
+    The cash drawer rides the receipt printer's drawer port, so we only add
+    a separate cash_drawer row when it names a DIFFERENT physical printer
+    (the unique printer name otherwise collides with the receipt row, and
+    the kick already piggy-backs on the receipt printer).
+    """
+    import configparser
+    import logging
+    from src.models import Printer
+    logger = logging.getLogger(__name__)
+
+    try:
+        with SessionLocal() as session:
+            if session.query(Printer).count() > 0:
+                return  # admin already has mappings — don't touch
+
+            cfg = configparser.ConfigParser()
+            cfg.read(CONFIG_PATH, encoding="utf-8")
+            if not cfg.has_section("printers"):
+                return
+
+            mapping = {
+                "receipt": cfg.get("printers", "receipt", fallback="").strip(),
+                "kitchen": cfg.get("printers", "kitchen", fallback="").strip(),
+                "shisha": cfg.get("printers", "shisha", fallback="").strip(),
+            }
+            drawer = cfg.get("printers", "cash_drawer", fallback="").strip()
+
+            seeded_names = set()
+            for purpose, name in mapping.items():
+                if name and name not in seeded_names:
+                    session.add(Printer(name=name, purpose=purpose, enabled=True))
+                    seeded_names.add(name)
+
+            # Separate drawer printer only if it's a distinct device.
+            if drawer and drawer not in seeded_names:
+                session.add(Printer(name=drawer, purpose="cash_drawer", enabled=True))
+                seeded_names.add(drawer)
+
+            session.commit()
+            logger.info("Seeded printers: %s", seeded_names)
+    except Exception as e:
+        logger.error("Printer seeding failed: %s", e)
 
 
 def _auto_import_items(session) -> None:

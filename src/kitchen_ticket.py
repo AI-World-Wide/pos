@@ -57,8 +57,46 @@ def _font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default()
 
 
-def render_kitchen_ticket(order: Order, db, line_ids: list[int] | None = None) -> Image.Image:
-    """Render kitchen ticket for non-beverage items."""
+def line_station(db, line) -> str:
+    """Classify which station an order line belongs to.
+
+    Returns:
+      "none"    -> beverage / receipt-only, never sent to a prep station
+      "shisha"  -> shisha items, print on the Shisha printer
+      "kitchen" -> everything else (food), print on the Kitchen (Bar) printer
+    """
+    if not getattr(line, "item_id", None):
+        return "kitchen"
+    item = db.get(Item, line.item_id)
+    if not item:
+        return "kitchen"
+    cat = db.get(Category, item.category_id)
+
+    # 1) Beverages are receipt-only — never sent to a prep station. This
+    #    takes priority over kitchen_station (seed data sets it to "Bar"
+    #    on drinks too, which must not pull them onto the kitchen ticket).
+    if cat and cat.is_beverage:
+        return "none"
+
+    # 2) Shisha — either an explicit per-item station or the Shisha category.
+    station = (getattr(item, "kitchen_station", "") or "").strip().lower()
+    if station in ("shisha", "شيشة"):
+        return "shisha"
+    if cat and ((cat.name_en or "").strip().lower() == "shisha" or "شيشة" in (cat.name_ar or "")):
+        return "shisha"
+
+    # 3) Everything else is food -> kitchen.
+    return "kitchen"
+
+
+def render_kitchen_ticket(order: Order, db, line_ids: list[int] | None = None,
+                          title: str = "طلب مطبخ") -> Image.Image:
+    """Render a prep-station ticket (kitchen or shisha).
+
+    When `line_ids` is provided the caller has already chosen exactly which
+    lines belong to this station, so they are rendered as-is (no beverage
+    re-filter). When omitted, falls back to all unsent non-beverage lines.
+    """
     W = TICKET_WIDTH
     MARGIN = 20
 
@@ -66,26 +104,25 @@ def render_kitchen_ticket(order: Order, db, line_ids: list[int] | None = None) -
     font_item = _font(24, bold=True)
     font_normal = _font(18)
 
-    # Get lines to print (only non-beverage items)
     if line_ids:
-        lines = db.query(OrderLine).filter(OrderLine.id.in_(line_ids)).all()
+        # Preserve the caller's order; render exactly these lines.
+        by_id = {l.id: l for l in db.query(OrderLine).filter(OrderLine.id.in_(line_ids)).all()}
+        kitchen_lines = [by_id[i] for i in line_ids if i in by_id and not by_id[i].voided]
     else:
         lines = [l for l in order.lines if not l.voided and not l.sent_to_kitchen]
-
-    # Filter out beverage-category items
-    kitchen_lines = []
-    for l in lines:
-        if l.item_id:
-            item = db.get(Item, l.item_id)
-            if item:
-                cat = db.get(Category, item.category_id)
-                if cat and cat.is_beverage:
-                    continue
-        kitchen_lines.append(l)
+        # Filter out beverage-category items
+        kitchen_lines = []
+        for l in lines:
+            if l.item_id:
+                item = db.get(Item, l.item_id)
+                if item:
+                    cat = db.get(Category, item.category_id)
+                    if cat and cat.is_beverage:
+                        continue
+            kitchen_lines.append(l)
 
     if not kitchen_lines:
-        # Still create a minimal ticket
-        kitchen_lines = [l for l in lines if not l.voided]
+        return Image.new("RGB", (W, 1), "white")
 
     font_note = _font(20)
 
@@ -110,7 +147,7 @@ def render_kitchen_ticket(order: Order, db, line_ids: list[int] | None = None) -
         draw.text((W - MARGIN - tw, y_pos), text, fill="black", font=font)
 
     # Title
-    draw_center("طلب مطبخ", font_title, y)
+    draw_center(title, font_title, y)
     y += 40
 
     # Order info

@@ -159,10 +159,11 @@ class PrintQueue(Base):
 
     id = Column(Integer, primary_key=True)
     order_id = Column(Integer, ForeignKey("orders.id"))
-    type = Column(String)  # receipt / kitchen
+    type = Column(String)  # receipt / kitchen / shisha
     status = Column(String, default="pending")  # pending / printed / failed
     attempts = Column(Integer, default=0)
     error_message = Column(Text)
+    line_ids = Column(Text)  # comma-separated OrderLine ids for station tickets
     created_at = Column(DateTime, default=datetime.now)
 
 

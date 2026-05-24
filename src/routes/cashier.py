@@ -345,10 +345,23 @@ def send_to_kitchen():
         order.status = "sent"
         db.commit()
 
-        # Phase 3: trigger kitchen ticket print
+        # Route each unsent line to its station and print one ticket per
+        # station on its own printer (kitchen -> Bar, shisha -> Shisha).
+        # Beverages ("none") never go to a prep station.
         try:
-            from src.printer import print_kitchen_ticket
-            print_kitchen_ticket(order.id, [l.id for l in unsent])
+            from src.kitchen_ticket import line_station
+            from src.printer import print_kitchen_ticket, print_shisha_ticket
+            kitchen_ids, shisha_ids = [], []
+            for l in unsent:
+                station = line_station(db, l)
+                if station == "shisha":
+                    shisha_ids.append(l.id)
+                elif station == "kitchen":
+                    kitchen_ids.append(l.id)
+            if kitchen_ids:
+                print_kitchen_ticket(order.id, kitchen_ids)
+            if shisha_ids:
+                print_shisha_ticket(order.id, shisha_ids)
         except Exception:
             pass  # Print failures handled by print queue
 

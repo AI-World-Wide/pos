@@ -165,8 +165,13 @@ def print_receipt_and_kick(order_id: int) -> None:
 
 
 def print_kitchen_ticket(order_id: int, line_ids: list[int] | None = None) -> None:
-    """Print kitchen ticket for unsent items."""
+    """Print kitchen ticket for the given (kitchen-station) lines."""
     _queue_print(order_id, "kitchen", line_ids=line_ids)
+
+
+def print_shisha_ticket(order_id: int, line_ids: list[int] | None = None) -> None:
+    """Print shisha ticket for the given (shisha-station) lines."""
+    _queue_print(order_id, "shisha", line_ids=line_ids)
 
 
 def _queue_print(order_id: int, print_type: str, line_ids: list[int] | None = None) -> None:
@@ -177,6 +182,7 @@ def _queue_print(order_id: int, print_type: str, line_ids: list[int] | None = No
             order_id=order_id,
             type=print_type,
             status="pending",
+            line_ids=",".join(str(i) for i in line_ids) if line_ids else None,
         )
         db.add(pq)
         db.commit()
@@ -207,18 +213,35 @@ def _attempt_print(pq_id: int, line_ids: list[int] | None = None) -> None:
             db.commit()
             return
 
+        # Recover line_ids from the queue row (so retries route correctly).
+        if line_ids is None and pq.line_ids:
+            line_ids = [int(x) for x in pq.line_ids.split(",") if x.strip().isdigit()]
+
         try:
             if pq.type == "receipt":
                 from src.receipt import render_receipt
                 img = render_receipt(order, db)
                 printer_name = _get_printer_name("receipt")
-            else:
+            elif pq.type == "shisha":
                 from src.kitchen_ticket import render_kitchen_ticket
-                img = render_kitchen_ticket(order, db, line_ids)
+                img = render_kitchen_ticket(order, db, line_ids, title="طلب شيشة")
+                # Shisha printer, with sensible fallbacks.
+                printer_name = (_get_printer_name_strict("shisha")
+                                or _get_printer_name_strict("kitchen")
+                                or _get_printer_name("receipt"))
+            else:  # kitchen
+                from src.kitchen_ticket import render_kitchen_ticket
+                img = render_kitchen_ticket(order, db, line_ids, title="طلب مطبخ")
                 printer_name = _get_printer_name("kitchen") or _get_printer_name("receipt")
 
             if not printer_name:
                 raise RuntimeError("No printer configured")
+
+            # An empty (1px) image means there was nothing for this station.
+            if img.size[1] <= 1:
+                pq.status = "printed"
+                db.commit()
+                return
 
             data = b'\x1b\x40'  # ESC @ = initialize printer
             data += _image_to_escpos_raster(img)
