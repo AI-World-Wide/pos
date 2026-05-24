@@ -126,6 +126,17 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 0;
+}
+
+/* #order-panel is the flex column itself so the item list (order-lines)
+   can scroll and the totals/Pay/Send stay pinned in view. */
+#order-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .order-head {

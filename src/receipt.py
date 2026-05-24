@@ -54,21 +54,26 @@ def shape_ar(text) -> str:
     except Exception:
         return text
 
-# Font paths — try bundled Cairo TTF first, fall back to system Arabic fonts
-_FONT_PATHS = [
+# Font paths — bundled Cairo TTF first, then system Arabic-capable fonts.
+# Separate lists so bold actually renders bold (Cairo TTFs aren't bundled,
+# so without a real bold face everything fell back to regular weight).
+_FONT_REGULAR = [
     _BUNDLE / "static" / "fonts" / "Cairo-Regular.ttf",
+    Path("C:/Windows/Fonts/segoeui.ttf"),
+    Path("C:/Windows/Fonts/arial.ttf"),
+]
+_FONT_BOLD = [
     _BUNDLE / "static" / "fonts" / "Cairo-Bold.ttf",
+    Path("C:/Windows/Fonts/segoeuib.ttf"),  # Segoe UI Bold (has Arabic)
+    Path("C:/Windows/Fonts/arialbd.ttf"),   # Arial Bold (has Arabic)
     Path("C:/Windows/Fonts/segoeui.ttf"),
     Path("C:/Windows/Fonts/arial.ttf"),
 ]
 
 
 def _find_font(bold: bool = False) -> str:
-    """Find a usable font file path."""
-    preferred = _FONT_PATHS[1] if bold else _FONT_PATHS[0]
-    if preferred.exists():
-        return str(preferred)
-    for p in _FONT_PATHS:
+    """Find a usable font file path (real bold face when bold=True)."""
+    for p in (_FONT_BOLD if bold else _FONT_REGULAR):
         if p.exists():
             return str(p)
     return "arial"  # PIL fallback
@@ -120,33 +125,33 @@ def render_receipt(order: Order, db) -> Image.Image:
             area = db.get(Area, ft.area_id)
             table_label = f"{area.name_ar} - {ft.number}" if area else str(ft.number)
 
-    # Pre-calculate layout height
-    font_title = _font(28, bold=True)
-    font_normal = _font(18)
-    font_small = _font(14)
-    font_header = _font(16, bold=True)
-    font_total = _font(22, bold=True)
+    # Pre-calculate layout height. Fonts are large + bold for readability;
+    # the 576px WIDTH is unchanged so it still fits the 80mm paper exactly.
+    font_title = _font(40, bold=True)
+    font_normal = _font(28, bold=True)
+    font_small = _font(23, bold=True)
+    font_header = _font(28, bold=True)
+    font_total = _font(38, bold=True)
 
     # Estimate height (generous; cropped to content at the end)
     h = 40  # top padding
-    h += 40  # cafe name (Arabic)
-    h += 30  # cafe name (English)
-    h += 30  # TRN
+    h += 52  # cafe name (Arabic)
+    h += 38  # cafe name (English)
+    h += 34  # TRN
     h += 10 + 2  # separator
-    h += 25 * 4  # date, order number, table, cashier
+    h += 38 * 4  # date, order number, table, cashier
     h += 10 + 2  # separator
-    h += 25  # header row
+    h += 38  # header row
     h += 10 + 2  # separator
-    h += len(lines) * 48  # item lines (Arabic + English = 2 lines each)
+    h += len(lines) * 70  # item lines (Arabic + English = 2 lines each)
     h += 10 + 2  # separator
-    h += 25 * 3  # subtotal, vat, total
+    h += 38 * 3  # subtotal, vat, total
     h += 10 + 2  # separator
     if order.payment_method == "cash":
-        h += 25 * 2  # cash received, change
+        h += 38 * 2  # cash received, change
         h += 10 + 2
-    h += 30 * 2  # thank you lines
+    h += 40 * 2  # thank you lines
     h += 40  # bottom padding
-    h += 220  # QR code space
     h += 30  # bottom margin
 
     img = Image.new("RGB", (W, h), "white")
@@ -178,14 +183,14 @@ def render_receipt(order: Order, db) -> Image.Image:
 
     # Cafe name — Arabic then English
     draw_center(cafe_name, font_title, y)
-    y += 40
+    y += 52
     if cafe_name_en:
         draw_center(cafe_name_en, font_header, y)
-        y += 28
+        y += 38
 
     # TRN
     draw_center(f"TRN: {trn}", font_small, y)
-    y += 25
+    y += 34
 
     y = draw_line(y)
 
@@ -193,17 +198,17 @@ def render_receipt(order: Order, db) -> Image.Image:
     now = order.closed_at or datetime.now()
     date_str = now.strftime("%d/%m/%Y  %I:%M %p")
     draw_row(f"{T['receipt_date']}: {date_str}", "", font_normal, y)
-    y += 25
+    y += 38
 
     draw_row(f"{T['receipt_number']}: {order.order_number}", "", font_normal, y)
-    y += 25
+    y += 38
 
     if table_label:
         draw_row(f"{T['tables']}: {table_label}", "", font_normal, y)
-        y += 25
+        y += 38
 
     draw_row(f"{T['receipt_cashier']}: {order.cashier or 'Admin'}", "", font_normal, y)
-    y += 25
+    y += 38
 
     y = draw_line(y)
 
@@ -211,7 +216,7 @@ def render_receipt(order: Order, db) -> Image.Image:
     draw_right(T["item"], font_header, y)
     draw_center(T["qty"], font_header, y)
     draw_left(T["price"], font_header, y)
-    y += 25
+    y += 40
 
     y = draw_line(y)
 
@@ -220,7 +225,7 @@ def render_receipt(order: Order, db) -> Image.Image:
         draw_right(l.item_name_ar or "", font_normal, y)
         draw_center(str(l.quantity), font_normal, y)
         draw_left(f"{l.line_total:.2f}", font_normal, y)
-        y += 23
+        y += 36
         # English name (snapshot, else look up the live item)
         name_en = (l.item_name_en or "").strip()
         if not name_en and l.item_id:
@@ -230,52 +235,38 @@ def render_receipt(order: Order, db) -> Image.Image:
                 name_en = it.name_en
         if name_en:
             draw_right(name_en, font_small, y)
-            y += 22
+            y += 32
         else:
-            y += 2
+            y += 4
 
     y = draw_line(y)
 
     # Totals
     draw_row(T["subtotal"], f"{T['currency']} {order.subtotal:.2f}", font_normal, y)
-    y += 25
+    y += 38
     draw_row(T["vat_5"], f"{T['currency']} {order.vat_amount:.2f}", font_small, y)
-    y += 25
+    y += 38
 
     y = draw_line(y)
 
     draw_row(T["total"], f"{T['currency']} {order.total:.2f}", font_total, y)
-    y += 35
+    y += 50
 
     y = draw_line(y)
 
     # Cash payment details
     if order.payment_method == "cash" and order.cash_received:
         draw_row(T["cash_received"], f"{T['currency']} {order.cash_received:.2f}", font_normal, y)
-        y += 25
+        y += 38
         draw_row(T["change_due"], f"{T['currency']} {order.change_due:.2f}", font_normal, y)
-        y += 25
+        y += 38
         y = draw_line(y)
 
     # Thank you
     draw_center(T["receipt_thanks_1"], font_normal, y)
-    y += 28
+    y += 40
     draw_center(T["receipt_thanks_2"], font_small, y)
-    y += 25
-
-    y = draw_line(y)
-
-    # QR code (VAT compliance info)
-    try:
-        import qrcode
-        qr_data = f"Cafe POS|TRN:{trn}|Order:{order.order_number}|Total:{order.total:.2f}|VAT:{order.vat_amount:.2f}"
-        qr = qrcode.make(qr_data)
-        qr = qr.resize((180, 180))
-        qr_x = (W - 180) // 2
-        img.paste(qr, (qr_x, y + 5))
-        y += 200
-    except Exception:
-        pass
+    y += 36
 
     # Crop to actual content
     img = img.crop((0, 0, W, y + 20))

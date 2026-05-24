@@ -44,10 +44,19 @@ def shape_ar(text) -> str:
 
 
 def _font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-    paths = [
-        _BUNDLE / "static" / "fonts" / ("Cairo-Bold.ttf" if bold else "Cairo-Regular.ttf"),
-        Path("C:/Windows/Fonts/segoeui.ttf"),
-    ]
+    if bold:
+        paths = [
+            _BUNDLE / "static" / "fonts" / "Cairo-Bold.ttf",
+            Path("C:/Windows/Fonts/segoeuib.ttf"),  # Segoe UI Bold (Arabic)
+            Path("C:/Windows/Fonts/arialbd.ttf"),   # Arial Bold (Arabic)
+            Path("C:/Windows/Fonts/segoeui.ttf"),
+        ]
+    else:
+        paths = [
+            _BUNDLE / "static" / "fonts" / "Cairo-Regular.ttf",
+            Path("C:/Windows/Fonts/segoeui.ttf"),
+            Path("C:/Windows/Fonts/arial.ttf"),
+        ]
     for p in paths:
         if p.exists():
             try:
@@ -100,9 +109,9 @@ def render_kitchen_ticket(order: Order, db, line_ids: list[int] | None = None,
     W = TICKET_WIDTH
     MARGIN = 20
 
-    font_title = _font(28, bold=True)
-    font_item = _font(24, bold=True)
-    font_normal = _font(18)
+    font_title = _font(38, bold=True)
+    font_item = _font(32, bold=True)
+    font_normal = _font(24, bold=True)
 
     if line_ids:
         # Preserve the caller's order; render exactly these lines.
@@ -124,7 +133,7 @@ def render_kitchen_ticket(order: Order, db, line_ids: list[int] | None = None,
     if not kitchen_lines:
         return Image.new("RGB", (W, 1), "white")
 
-    font_note = _font(20)
+    font_note = _font(26, bold=True)
 
     # Table label (e.g. "منطقة 1 - 5") for this order, if any.
     table_label = ""
@@ -137,7 +146,7 @@ def render_kitchen_ticket(order: Order, db, line_ids: list[int] | None = None,
 
     # Calculate height (generous; cropped to actual content at the end).
     # Each item may carry a note line, and the order may carry a table note.
-    h = 30 + 40 + 30 + 30 + 30 + 10 + len(kitchen_lines) * 78 + 30 + 30 + 120
+    h = 40 + 50 + 40 + 50 + 10 + len(kitchen_lines) * 92 + 40 + 50 + 140
 
     img = Image.new("RGB", (W, h), "white")
     draw = ImageDraw.Draw(img)
@@ -162,14 +171,14 @@ def render_kitchen_ticket(order: Order, db, line_ids: list[int] | None = None,
     # Table name (prominent for the kitchen/shisha staff)
     if table_label:
         draw_center(table_label, font_item, y)
-        y += 32
+        y += 42
 
     # Order number + exact date and time
     now = datetime.now()
     draw_center(f"{order.order_number}", font_normal, y)
-    y += 28
+    y += 34
     draw_center(now.strftime("%d/%m/%Y  %I:%M %p"), font_normal, y)
-    y += 30
+    y += 38
 
     # Separator
     draw.line([(MARGIN, y), (W - MARGIN, y)], fill="black", width=2)
@@ -185,24 +194,24 @@ def render_kitchen_ticket(order: Order, db, line_ids: list[int] | None = None,
         tw = bbox[2] - bbox[0]
         draw.text((W - MARGIN - tw, y), name, fill="black", font=font_item)
         draw.text((MARGIN, y), qty_text, fill="black", font=font_item)
-        y += 38
+        y += 46
 
         # Per-item note (e.g. "بدون سكر") under the item, indented.
         note = (getattr(l, "note", None) or "").strip()
         if note:
             draw_right("- " + note, font_note, y)
-            y += 30
+            y += 36
 
     # Bottom separator
-    y += 5
+    y += 6
     draw.line([(MARGIN, y), (W - MARGIN, y)], fill="black", width=2)
-    y += 14
+    y += 16
 
     # Whole-table note (printed once, at the bottom).
     table_note = (getattr(order, "notes", None) or "").strip()
     if table_note:
         draw_right("ملاحظة: " + table_note, font_note, y)
-        y += 30
+        y += 36
 
     img = img.crop((0, 0, W, y + 10))
     return img
