@@ -26,6 +26,34 @@ PROJECT_ROOT = RUNTIME_DIR
 CONFIG_PATH = _DB_CONFIG_PATH
 RECEIPT_WIDTH = 576
 
+# Arabic shaping: join letters into contextual forms (reshaper) and reorder
+# for right-to-left display (bidi). Without this, Pillow draws Arabic as
+# isolated, left-to-right glyphs — which is the garbled output on the printout.
+try:
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+    _HAS_AR_SHAPING = True
+except Exception:  # pragma: no cover - shaping libs missing
+    _HAS_AR_SHAPING = False
+
+
+def shape_ar(text) -> str:
+    """Reshape + bidi-reorder Arabic text for correct printed rendering.
+
+    Numbers and Latin segments are preserved in their natural order by the
+    bidi algorithm, so mixed strings (e.g. "التاريخ: 24/05/2026") render
+    correctly. Safe to call on any string.
+    """
+    if text is None:
+        return ""
+    text = str(text)
+    if not text or not _HAS_AR_SHAPING:
+        return text
+    try:
+        return get_display(arabic_reshaper.reshape(text))
+    except Exception:
+        return text
+
 # Font paths — try bundled Cairo TTF first, fall back to system Arabic fonts
 _FONT_PATHS = [
     _BUNDLE / "static" / "fonts" / "Cairo-Regular.ttf",
@@ -114,17 +142,19 @@ def render_receipt(order: Order, db) -> Image.Image:
     y = 30
 
     def draw_center(text, font, y_pos):
+        text = shape_ar(text)
         bbox = draw.textbbox((0, 0), text, font=font)
         tw = bbox[2] - bbox[0]
         draw.text(((W - tw) / 2, y_pos), text, fill="black", font=font)
 
     def draw_right(text, font, y_pos):
+        text = shape_ar(text)
         bbox = draw.textbbox((0, 0), text, font=font)
         tw = bbox[2] - bbox[0]
         draw.text((W - MARGIN - tw, y_pos), text, fill="black", font=font)
 
     def draw_left(text, font, y_pos):
-        draw.text((MARGIN, y_pos), text, fill="black", font=font)
+        draw.text((MARGIN, y_pos), shape_ar(text), fill="black", font=font)
 
     def draw_line(y_pos):
         draw.line([(MARGIN, y_pos), (W - MARGIN, y_pos)], fill="#999999", width=1)

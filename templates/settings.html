@@ -45,17 +45,20 @@
   <h3 style="font-size:16px;margin-bottom:8px">{{ t.discover_printers }}</h3>
   {% if discovered %}
     {% for p in discovered %}
+      {% set saved_purpose = purpose_by_name.get(p.name) %}
       <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee">
-        <span>{{ p.name }} <small style="color:#999">{{ p.port }}</small></span>
+        <span>{{ p.name }} <small style="color:#999">{{ p.port }}</small>
+          {% if saved_purpose %}<span style="color:#27ae60;font-size:12px">● {{ t['printer_' + saved_purpose] if t['printer_' + saved_purpose] != ('<missing:printer_' + saved_purpose + '>') else saved_purpose }}</span>{% endif %}
+        </span>
         <form method="post" action="{{ url_for('settings.add_printer') }}" style="display:flex;gap:6px">
           <input type="hidden" name="printer_name" value="{{ p.name }}">
           <select name="purpose" class="form-select" style="width:auto;height:36px">
-            <option value="receipt">{{ t.printer_receipt }}</option>
-            <option value="kitchen">{{ t.printer_kitchen }}</option>
-            <option value="shisha">{{ t.printer_shisha }}</option>
-            <option value="cash_drawer">{{ t.printer_cash_drawer }}</option>
+            <option value="receipt" {% if saved_purpose == 'receipt' %}selected{% endif %}>{{ t.printer_receipt }}</option>
+            <option value="kitchen" {% if saved_purpose == 'kitchen' %}selected{% endif %}>{{ t.printer_kitchen }}</option>
+            <option value="shisha" {% if saved_purpose == 'shisha' %}selected{% endif %}>{{ t.printer_shisha }}</option>
+            <option value="cash_drawer" {% if saved_purpose == 'cash_drawer' %}selected{% endif %}>{{ t.printer_cash_drawer }}</option>
           </select>
-          <button type="submit" class="btn btn--success btn--sm">+</button>
+          <button type="submit" class="btn btn--success btn--sm">{{ t.save }}</button>
         </form>
       </div>
     {% endfor %}
@@ -76,8 +79,18 @@
 
   <h3 style="font-size:16px;margin:18px 0 8px">{{ t.printer_settings }}</h3>
   {% for p in printers_db %}
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee">
-      <span>{{ p.name }} — <strong>{{ p.purpose }}</strong></span>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:8px 0;border-bottom:1px solid #eee">
+      <span style="flex:1">{{ p.name }}</span>
+      <form method="post" action="{{ url_for('settings.add_printer') }}" style="display:flex;gap:6px">
+        <input type="hidden" name="printer_name" value="{{ p.name }}">
+        <select name="purpose" class="form-select" style="width:auto;height:36px" onchange="this.form.requestSubmit()">
+          <option value="receipt" {% if p.purpose == 'receipt' %}selected{% endif %}>{{ t.printer_receipt }}</option>
+          <option value="kitchen" {% if p.purpose == 'kitchen' %}selected{% endif %}>{{ t.printer_kitchen }}</option>
+          <option value="shisha" {% if p.purpose == 'shisha' %}selected{% endif %}>{{ t.printer_shisha }}</option>
+          <option value="cash_drawer" {% if p.purpose == 'cash_drawer' %}selected{% endif %}>{{ t.printer_cash_drawer }}</option>
+        </select>
+        <button type="submit" class="btn btn--success btn--sm">{{ t.save }}</button>
+      </form>
       <form method="post" action="{{ url_for('settings.delete_printer', pid=p.id) }}">
         <button type="submit" class="btn btn--danger btn--sm">×</button>
       </form>

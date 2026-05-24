@@ -63,6 +63,10 @@ def index():
         gmail_connected = bool(settings.get("gmail_refresh_token"))
 
         discovered = discover_printers()
+        # Map each saved printer name -> its purpose so the discovered-printer
+        # dropdowns show the CURRENT mapping instead of always defaulting to
+        # "receipt" (which made saved mappings look like they reset).
+        purpose_by_name = {p.name: p.purpose for p in printers_db}
 
         all_perms = {}
         for p in db.query(Permission).all():
@@ -72,6 +76,7 @@ def index():
                                settings=settings,
                                printers_db=printers_db,
                                discovered=discovered,
+                               purpose_by_name=purpose_by_name,
                                users=users,
                                all_perms=all_perms,
                                perm_keys=PERMISSION_KEYS,
@@ -318,8 +323,10 @@ def test_drawer():
         if not printer_name:
             flash("No printer configured", "error")
             return redirect(url_for("settings.index"))
-        _send_raw_to_printer(printer_name, _kick_drawer_bytes())
-        flash("Drawer kick sent", "success")
+        # ESC @ initialises the printer before the drawer pulse — some
+        # printers ignore a bare pulse command sent cold.
+        _send_raw_to_printer(printer_name, b"\x1b\x40" + _kick_drawer_bytes())
+        flash(f"Drawer kick sent to: {printer_name}", "success")
     except Exception as e:
         flash(f"Drawer error: {e}", "error")
     return redirect(url_for("settings.index"))

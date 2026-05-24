@@ -21,6 +21,27 @@ else:
 
 TICKET_WIDTH = 576
 
+# Arabic shaping (join letters + RTL reorder) — see src/receipt.py.
+try:
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+    _HAS_AR_SHAPING = True
+except Exception:  # pragma: no cover
+    _HAS_AR_SHAPING = False
+
+
+def shape_ar(text) -> str:
+    """Reshape + bidi-reorder Arabic for correct printed rendering."""
+    if text is None:
+        return ""
+    text = str(text)
+    if not text or not _HAS_AR_SHAPING:
+        return text
+    try:
+        return get_display(arabic_reshaper.reshape(text))
+    except Exception:
+        return text
+
 
 def _font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     paths = [
@@ -74,6 +95,7 @@ def render_kitchen_ticket(order: Order, db, line_ids: list[int] | None = None) -
     y = 20
 
     def draw_center(text, font, y_pos):
+        text = shape_ar(text)
         bbox = draw.textbbox((0, 0), text, font=font)
         tw = bbox[2] - bbox[0]
         draw.text(((W - tw) / 2, y_pos), text, fill="black", font=font)
@@ -93,7 +115,7 @@ def render_kitchen_ticket(order: Order, db, line_ids: list[int] | None = None) -
 
     # Items (larger font for kitchen readability)
     for l in kitchen_lines:
-        name = l.item_name_ar or ""
+        name = shape_ar(l.item_name_ar or "")
         qty_text = f"×{l.quantity}"
 
         # Name on right, qty on left

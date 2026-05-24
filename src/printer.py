@@ -223,7 +223,8 @@ def _attempt_print(pq_id: int, line_ids: list[int] | None = None) -> None:
             drawer_printer = _get_printer_name_strict("cash_drawer") if kick_drawer else None
             if drawer_printer and drawer_printer != printer_name:
                 _send_raw_to_printer(printer_name, data)
-                _send_raw_to_printer(drawer_printer, kick_data)
+                # Init the drawer printer before the pulse.
+                _send_raw_to_printer(drawer_printer, b'\x1b\x40' + kick_data)
             else:
                 _send_raw_to_printer(printer_name, data + kick_data)
 

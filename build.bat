@@ -31,6 +31,10 @@ pyinstaller --noconfirm ^
     --hidden-import=src.email_report ^
     --hidden-import=src.pdf_report ^
     --hidden-import=fpdf ^
+    --hidden-import=arabic_reshaper ^
+    --hidden-import=bidi ^
+    --hidden-import=bidi.algorithm ^
+    --collect-data arabic_reshaper ^
     --hidden-import=src.seed_users ^
     --hidden-import=src.translations ^
     --hidden-import=src.translations.ar ^
