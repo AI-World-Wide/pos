@@ -66,13 +66,46 @@ def _font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default()
 
 
+_STATION_CFG = None
+
+
+def _station_config() -> dict:
+    """Read the [stations] section of config.ini once.
+
+    shisha       = category names that print on the Shisha printer
+    receipt_only = category names that print on NO prep printer (receipt only)
+    Anything not in either list prints on the Kitchen (Bar) printer — so by
+    default cold drinks / hot drinks / juices DO print on the Bar. To stop a
+    category from printing, add its name to receipt_only and restart.
+    """
+    global _STATION_CFG
+    if _STATION_CFG is None:
+        import configparser
+        from src.database import CONFIG_PATH
+        cfg = configparser.ConfigParser()
+        try:
+            cfg.read(CONFIG_PATH, encoding="utf-8")
+        except Exception:
+            pass
+
+        def parse(key):
+            raw = cfg.get("stations", key, fallback="") if cfg.has_section("stations") else ""
+            return {x.strip().lower() for x in raw.split(",") if x.strip()}
+
+        _STATION_CFG = {
+            "shisha": parse("shisha") or {"shisha"},
+            "receipt_only": parse("receipt_only"),
+        }
+    return _STATION_CFG
+
+
 def line_station(db, line) -> str:
     """Classify which station an order line belongs to.
 
-    Returns:
-      "none"    -> beverage / receipt-only, never sent to a prep station
-      "shisha"  -> shisha items, print on the Shisha printer
-      "kitchen" -> everything else (food), print on the Kitchen (Bar) printer
+    Driven by config.ini [stations]:
+      "shisha"  -> Shisha printer
+      "none"    -> receipt only, no prep printer
+      "kitchen" -> everything else, prints on the Kitchen (Bar) printer
     """
     if not getattr(line, "item_id", None):
         return "kitchen"
@@ -80,21 +113,27 @@ def line_station(db, line) -> str:
     if not item:
         return "kitchen"
     cat = db.get(Category, item.category_id)
+    sc = _station_config()
 
-    # 1) Beverages are receipt-only — never sent to a prep station. This
-    #    takes priority over kitchen_station (seed data sets it to "Bar"
-    #    on drinks too, which must not pull them onto the kitchen ticket).
-    if cat and cat.is_beverage:
-        return "none"
+    names = set()
+    if cat:
+        if cat.name_en:
+            names.add(cat.name_en.strip().lower())
+        if cat.name_ar:
+            names.add(cat.name_ar.strip().lower())
 
-    # 2) Shisha — either an explicit per-item station or the Shisha category.
+    # 1) Shisha — explicit per-item station OR a configured shisha category.
     station = (getattr(item, "kitchen_station", "") or "").strip().lower()
     if station in ("shisha", "شيشة"):
         return "shisha"
-    if cat and ((cat.name_en or "").strip().lower() == "shisha" or "شيشة" in (cat.name_ar or "")):
+    if names & sc["shisha"] or "شيشة" in (cat.name_ar if cat else ""):
         return "shisha"
 
-    # 3) Everything else is food -> kitchen.
+    # 2) Categories explicitly marked receipt-only never reach a prep printer.
+    if names & sc["receipt_only"]:
+        return "none"
+
+    # 3) Everything else (food AND drinks) prints on the Kitchen (Bar) printer.
     return "kitchen"
 
 
