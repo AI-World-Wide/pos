@@ -90,6 +90,7 @@ def _get_setting(db, key: str, fallback: str = "") -> str:
     cfg.read(CONFIG_PATH, encoding="utf-8")
     section_map = {
         "cafe_name_ar": ("cafe", "name_ar"),
+        "cafe_name_en": ("cafe", "name_en"),
         "trn": ("cafe", "trn"),
         "vat_rate": ("vat", "rate"),
     }
@@ -106,8 +107,18 @@ def render_receipt(order: Order, db) -> Image.Image:
 
     # Gather data
     cafe_name = _get_setting(db, "cafe_name_ar", T["cafe_name_default"])
+    cafe_name_en = _get_setting(db, "cafe_name_en", "")
     trn = _get_setting(db, "trn", "100000000000000")
     lines = [l for l in order.lines if not l.voided]
+
+    # Table label (e.g. "منطقة 1 - 5"), if this order is on a table.
+    table_label = ""
+    if order.table_id:
+        from src.models import FloorTable, Area
+        ft = db.get(FloorTable, order.table_id)
+        if ft:
+            area = db.get(Area, ft.area_id)
+            table_label = f"{area.name_ar} - {ft.number}" if area else str(ft.number)
 
     # Pre-calculate layout height
     font_title = _font(28, bold=True)
@@ -116,16 +127,17 @@ def render_receipt(order: Order, db) -> Image.Image:
     font_header = _font(16, bold=True)
     font_total = _font(22, bold=True)
 
-    # Estimate height
+    # Estimate height (generous; cropped to content at the end)
     h = 40  # top padding
-    h += 40  # cafe name
+    h += 40  # cafe name (Arabic)
+    h += 30  # cafe name (English)
     h += 30  # TRN
     h += 10 + 2  # separator
-    h += 25 * 3  # date, order number, cashier
+    h += 25 * 4  # date, order number, table, cashier
     h += 10 + 2  # separator
     h += 25  # header row
     h += 10 + 2  # separator
-    h += len(lines) * 25  # item lines
+    h += len(lines) * 48  # item lines (Arabic + English = 2 lines each)
     h += 10 + 2  # separator
     h += 25 * 3  # subtotal, vat, total
     h += 10 + 2  # separator
@@ -164,9 +176,12 @@ def render_receipt(order: Order, db) -> Image.Image:
         draw_right(right_text, font, y_pos)
         draw_left(left_text, font, y_pos)
 
-    # Cafe name
+    # Cafe name — Arabic then English
     draw_center(cafe_name, font_title, y)
     y += 40
+    if cafe_name_en:
+        draw_center(cafe_name_en, font_header, y)
+        y += 28
 
     # TRN
     draw_center(f"TRN: {trn}", font_small, y)
@@ -174,7 +189,7 @@ def render_receipt(order: Order, db) -> Image.Image:
 
     y = draw_line(y)
 
-    # Date/time
+    # Date/time (exact), order number, table, cashier
     now = order.closed_at or datetime.now()
     date_str = now.strftime("%d/%m/%Y  %I:%M %p")
     draw_row(f"{T['receipt_date']}: {date_str}", "", font_normal, y)
@@ -182,6 +197,10 @@ def render_receipt(order: Order, db) -> Image.Image:
 
     draw_row(f"{T['receipt_number']}: {order.order_number}", "", font_normal, y)
     y += 25
+
+    if table_label:
+        draw_row(f"{T['tables']}: {table_label}", "", font_normal, y)
+        y += 25
 
     draw_row(f"{T['receipt_cashier']}: {order.cashier or 'Admin'}", "", font_normal, y)
     y += 25
@@ -196,12 +215,24 @@ def render_receipt(order: Order, db) -> Image.Image:
 
     y = draw_line(y)
 
-    # Items
+    # Items — Arabic name on the row, English name underneath
     for l in lines:
         draw_right(l.item_name_ar or "", font_normal, y)
         draw_center(str(l.quantity), font_normal, y)
         draw_left(f"{l.line_total:.2f}", font_normal, y)
-        y += 25
+        y += 23
+        # English name (snapshot, else look up the live item)
+        name_en = (l.item_name_en or "").strip()
+        if not name_en and l.item_id:
+            from src.models import Item
+            it = db.get(Item, l.item_id)
+            if it and it.name_en:
+                name_en = it.name_en
+        if name_en:
+            draw_right(name_en, font_small, y)
+            y += 22
+        else:
+            y += 2
 
     y = draw_line(y)
 

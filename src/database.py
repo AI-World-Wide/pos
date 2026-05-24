@@ -99,6 +99,7 @@ def _run_migrations() -> None:
     # (table, column, type) tuples to ensure exist.
     wanted = [
         ("order_lines", "note", "TEXT"),
+        ("order_lines", "item_name_en", "TEXT"),
         ("orders", "notes", "TEXT"),
         ("print_queue", "line_ids", "TEXT"),
     ]

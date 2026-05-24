@@ -137,6 +137,7 @@ class OrderLine(Base):
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
     item_id = Column(Integer, ForeignKey("items.id"))
     item_name_ar = Column(String)  # snapshot at order time
+    item_name_en = Column(String)  # English name snapshot (for bilingual receipt)
     quantity = Column(Integer, default=1)
     unit_price_inclusive = Column(Float)  # snapshot of price_inclusive
     line_total = Column(Float)  # unit_price_inclusive * quantity

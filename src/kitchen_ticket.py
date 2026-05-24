@@ -126,9 +126,18 @@ def render_kitchen_ticket(order: Order, db, line_ids: list[int] | None = None,
 
     font_note = _font(20)
 
+    # Table label (e.g. "منطقة 1 - 5") for this order, if any.
+    table_label = ""
+    if getattr(order, "table_id", None):
+        from src.models import FloorTable, Area
+        ft = db.get(FloorTable, order.table_id)
+        if ft:
+            area = db.get(Area, ft.area_id)
+            table_label = f"{area.name_ar} - {ft.number}" if area else str(ft.number)
+
     # Calculate height (generous; cropped to actual content at the end).
     # Each item may carry a note line, and the order may carry a table note.
-    h = 30 + 40 + 30 + 10 + len(kitchen_lines) * 78 + 30 + 30 + 120
+    h = 30 + 40 + 30 + 30 + 30 + 10 + len(kitchen_lines) * 78 + 30 + 30 + 120
 
     img = Image.new("RGB", (W, h), "white")
     draw = ImageDraw.Draw(img)
@@ -150,9 +159,16 @@ def render_kitchen_ticket(order: Order, db, line_ids: list[int] | None = None,
     draw_center(title, font_title, y)
     y += 40
 
-    # Order info
+    # Table name (prominent for the kitchen/shisha staff)
+    if table_label:
+        draw_center(table_label, font_item, y)
+        y += 32
+
+    # Order number + exact date and time
     now = datetime.now()
-    draw_center(f"{order.order_number}  |  {now.strftime('%H:%M')}", font_normal, y)
+    draw_center(f"{order.order_number}", font_normal, y)
+    y += 28
+    draw_center(now.strftime("%d/%m/%Y  %I:%M %p"), font_normal, y)
     y += 30
 
     # Separator
