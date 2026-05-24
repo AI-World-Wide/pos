@@ -87,8 +87,11 @@ def render_kitchen_ticket(order: Order, db, line_ids: list[int] | None = None) -
         # Still create a minimal ticket
         kitchen_lines = [l for l in lines if not l.voided]
 
-    # Calculate height
-    h = 30 + 40 + 30 + 10 + len(kitchen_lines) * 40 + 30 + 30 + 30
+    font_note = _font(20)
+
+    # Calculate height (generous; cropped to actual content at the end).
+    # Each item may carry a note line, and the order may carry a table note.
+    h = 30 + 40 + 30 + 10 + len(kitchen_lines) * 78 + 30 + 30 + 120
 
     img = Image.new("RGB", (W, h), "white")
     draw = ImageDraw.Draw(img)
@@ -99,6 +102,12 @@ def render_kitchen_ticket(order: Order, db, line_ids: list[int] | None = None) -
         bbox = draw.textbbox((0, 0), text, font=font)
         tw = bbox[2] - bbox[0]
         draw.text(((W - tw) / 2, y_pos), text, fill="black", font=font)
+
+    def draw_right(text, font, y_pos):
+        text = shape_ar(text)
+        bbox = draw.textbbox((0, 0), text, font=font)
+        tw = bbox[2] - bbox[0]
+        draw.text((W - MARGIN - tw, y_pos), text, fill="black", font=font)
 
     # Title
     draw_center("طلب مطبخ", font_title, y)
@@ -125,10 +134,22 @@ def render_kitchen_ticket(order: Order, db, line_ids: list[int] | None = None) -
         draw.text((MARGIN, y), qty_text, fill="black", font=font_item)
         y += 38
 
+        # Per-item note (e.g. "بدون سكر") under the item, indented.
+        note = (getattr(l, "note", None) or "").strip()
+        if note:
+            draw_right("- " + note, font_note, y)
+            y += 30
+
     # Bottom separator
     y += 5
     draw.line([(MARGIN, y), (W - MARGIN, y)], fill="black", width=2)
-    y += 20
+    y += 14
+
+    # Whole-table note (printed once, at the bottom).
+    table_note = (getattr(order, "notes", None) or "").strip()
+    if table_note:
+        draw_right("ملاحظة: " + table_note, font_note, y)
+        y += 30
 
     img = img.crop((0, 0, W, y + 10))
     return img

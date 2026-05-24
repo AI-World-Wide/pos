@@ -71,6 +71,7 @@ def init_db() -> None:
     from src.seed_tables import seed_areas_and_tables
 
     Base.metadata.create_all(bind=engine)
+    _run_migrations()
     with SessionLocal() as session:
         seed_users_and_permissions(session)
         seed_areas_and_tables(session)
@@ -80,6 +81,37 @@ def init_db() -> None:
     with SessionLocal() as session:
         if session.query(Item).count() == 0:
             _auto_import_items(session)
+
+
+def _run_migrations() -> None:
+    """Add columns introduced after a DB was first created.
+
+    create_all() only creates missing tables — it never alters existing
+    ones. This adds any newly-introduced columns to live databases on the
+    Dell without losing data. Each ALTER is guarded by a PRAGMA check so
+    it's idempotent and safe to run on every startup.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # (table, column, type) tuples to ensure exist.
+    wanted = [
+        ("order_lines", "note", "TEXT"),
+        ("orders", "notes", "TEXT"),
+    ]
+    try:
+        with engine.begin() as conn:
+            for table, column, coltype in wanted:
+                cols = [row[1] for row in conn.exec_driver_sql(
+                    f"PRAGMA table_info({table})"
+                ).fetchall()]
+                if cols and column not in cols:
+                    conn.exec_driver_sql(
+                        f"ALTER TABLE {table} ADD COLUMN {column} {coltype}"
+                    )
+                    logger.info("Migration: added %s.%s", table, column)
+    except Exception as e:
+        logger.error("Migration failed: %s", e)
 
 
 def _auto_import_items(session) -> None:

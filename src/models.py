@@ -142,6 +142,7 @@ class OrderLine(Base):
     line_total = Column(Float)  # unit_price_inclusive * quantity
     sent_to_kitchen = Column(Integer, default=0)
     voided = Column(Integer, default=0)
+    note = Column(Text)  # optional per-item note (e.g. "no sugar")
 
     order = relationship("Order", back_populates="lines")
 

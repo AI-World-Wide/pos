@@ -295,6 +295,39 @@ def edit_line_price(line_id: int):
         db.close()
 
 
+@bp.post("/order/line-note/<int:line_id>")
+def set_line_note(line_id: int):
+    """HTMX: save a per-item note. Returns 204 so the input keeps focus."""
+    db = get_session()
+    try:
+        line = db.get(OrderLine, line_id)
+        if not line:
+            return "", 404
+        note = (request.form.get("note") or "").strip()
+        line.note = note or None
+        db.commit()
+        return "", 204
+    finally:
+        db.close()
+
+
+@bp.post("/order/note")
+def set_order_note():
+    """HTMX: save a note for the whole order/table. Returns 204."""
+    db = get_session()
+    try:
+        order_id = session.get("current_order_id")
+        order = db.get(Order, order_id) if order_id else None
+        if order is None:
+            return "", 204  # no active order yet — nothing to attach to
+        note = (request.form.get("note") or "").strip()
+        order.notes = note or None
+        db.commit()
+        return "", 204
+    finally:
+        db.close()
+
+
 @bp.post("/order/send")
 def send_to_kitchen():
     """Mark unsent lines as sent + trigger kitchen print (Phase 3)."""
@@ -519,6 +552,7 @@ def _get_order_view_data(db, order=None) -> dict:
             "unit_price": l.unit_price_inclusive,
             "line_total": l.line_total,
             "sent": l.sent_to_kitchen,
+            "note": l.note or "",
         }
         for l in order.lines if not l.voided
     ]
@@ -562,4 +596,5 @@ def _get_order_view_data(db, order=None) -> dict:
         "table_info": table_info,
         "move_targets": move_areas,
         "opened_at": order.created_at.isoformat() if order.created_at else None,
+        "note": order.notes or "",
     }

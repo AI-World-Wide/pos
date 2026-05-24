@@ -241,6 +241,34 @@
 }
 .price-edit-btn:hover, .price-edit-btn:active { border-color: #b8954a; background: #fff8e7; }
 
+/* Per-item note + whole-order note inputs */
+.line-note-input {
+  width: 100%;
+  margin-top: 6px;
+  padding: 5px 8px;
+  border: 1px solid #e0d6c2;
+  border-radius: 6px;
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px;
+  background: #fffdf7;
+  direction: rtl;
+}
+.line-note-input:focus { border-color: #b8954a; outline: none; background: #fff; }
+.order-note-bar { margin-top: 10px; }
+.order-note-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #e0d6c2;
+  border-radius: 8px;
+  font-family: 'Cairo', sans-serif;
+  font-size: 14px;
+  background: #fffdf7;
+  direction: rtl;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.order-note-input:focus { border-color: #b8954a; outline: none; background: #fff; }
+
 /* --- Totals --- */
 .order-totals {
   padding: 10px 14px;

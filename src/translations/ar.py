@@ -177,6 +177,9 @@ T = {
     "admin_pin_required": "أدخل رقم المدير السري",
     "edit_price": "تعديل السعر",
     "new_price": "السعر الجديد",
+    "item_note": "ملاحظة على الصنف",
+    "table_note": "ملاحظة على الطاولة",
+    "note_placeholder": "ملاحظة...",
 
     # Floor plan / Tables
     "floor_plan": "خريطة الطاولات",

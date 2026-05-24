@@ -67,6 +67,11 @@
                     onclick="showAdminPinModal('{{ url_for('cashier.adjust_qty', line_id=l.id, action='void') }}')">×</button>
           {% endif %}
         </div>
+        <input type="text" class="line-note-input" name="note"
+               value="{{ l.note }}" placeholder="{{ t.note_placeholder }}"
+               hx-post="{{ url_for('cashier.set_line_note', line_id=l.id) }}"
+               hx-trigger="change" hx-swap="none"
+               onclick="event.stopPropagation()">
       </div>
     {% endfor %}
   {% else %}
@@ -88,6 +93,15 @@
     <span>{{ t.currency }} {{ "%.2f"|format(order.total) }}</span>
   </div>
 </div>
+
+{% if order.id %}
+<div class="order-note-bar">
+  <textarea class="order-note-input" name="note" rows="2"
+            placeholder="{{ t.table_note }}"
+            hx-post="{{ url_for('cashier.set_order_note') }}"
+            hx-trigger="change" hx-swap="none">{{ order.note }}</textarea>
+</div>
+{% endif %}
 
 {% if order.table_id %}
 <div class="order-table-actions">
