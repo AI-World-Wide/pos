@@ -237,6 +237,9 @@ def _attempt_print(pq_id: int, line_ids: list[int] | None = None) -> None:
             if not printer_name:
                 raise RuntimeError("No printer configured")
 
+            logger.info("Printing %s for order %s -> printer '%s'",
+                        pq.type, pq.order_id, printer_name)
+
             # An empty (1px) image means there was nothing for this station.
             if img.size[1] <= 1:
                 pq.status = "printed"

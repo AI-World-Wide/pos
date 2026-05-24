@@ -217,9 +217,75 @@ def split_form(table_id: int):
         db.close()
 
 
+def _parse_move_quantities(source_order_id, db):
+    """Read how many units of each line to move from the submitted form.
+
+    Supports per-quantity inputs named `qty_<line_id>` (new UI). Falls back
+    to whole-line checkboxes named `line_ids` (= move the entire line).
+    Returns a dict {line_id: units_to_move} clamped to each line's quantity.
+    """
+    lines = {l.id: l for l in db.query(OrderLine).filter(
+        OrderLine.order_id == source_order_id, OrderLine.voided == 0
+    ).all()}
+    qty_map = {}
+    for lid, line in lines.items():
+        n = request.form.get(f"qty_{lid}", type=int)
+        if n is None:
+            # checkbox fallback
+            if lid in request.form.getlist("line_ids", type=int):
+                n = line.quantity
+            else:
+                n = 0
+        n = max(0, min(n or 0, line.quantity))
+        if n > 0:
+            qty_map[lid] = n
+    return qty_map
+
+
+def _move_units(db, qty_map, dest_order_id):
+    """Move `n` units of each source line into dest_order.
+
+    Whole line -> reassigned. Partial -> source qty reduced and a new line
+    of `n` units created on the destination, preserving item + price + names.
+    """
+    for lid, n in qty_map.items():
+        line = db.get(OrderLine, lid)
+        if not line or n <= 0:
+            continue
+        if n >= line.quantity:
+            line.order_id = dest_order_id
+        else:
+            line.quantity -= n
+            line.line_total = round(line.quantity * line.unit_price_inclusive, 2)
+            db.add(OrderLine(
+                order_id=dest_order_id,
+                item_id=line.item_id,
+                item_name_ar=line.item_name_ar,
+                item_name_en=line.item_name_en,
+                quantity=n,
+                unit_price_inclusive=line.unit_price_inclusive,
+                line_total=round(n * line.unit_price_inclusive, 2),
+                voided=0,
+                sent_to_kitchen=line.sent_to_kitchen,
+                note=line.note,
+            ))
+    db.flush()
+
+
+def _recalc_order(db, order):
+    """Recompute an order's subtotal/VAT/total from its active lines."""
+    from src.routes.cashier import _apply_vat
+    base = db.query(OrderLine).filter(
+        OrderLine.order_id == order.id, OrderLine.voided == 0
+    ).all()
+    total_base = sum(l.line_total for l in base)
+    order.subtotal, order.vat_amount, order.total = _apply_vat(total_base)
+    return len(base)
+
+
 @bp.post("/split/<int:table_id>")
 def split_execute(table_id: int):
-    """Execute split: move selected lines to a target table, or go to payment."""
+    """Execute split: move chosen quantities to a target table, or to payment."""
     db = get_session()
     try:
         table = db.get(FloorTable, table_id)
@@ -228,20 +294,17 @@ def split_execute(table_id: int):
 
         source_order = db.get(Order, table.current_order_id)
         target_table_id = request.form.get("target_table_id", type=int)
-        line_ids = request.form.getlist("line_ids", type=int)
         action = request.form.get("action", "split")
 
-        if not line_ids:
+        qty_map = _parse_move_quantities(source_order.id, db)
+        if not qty_map:
             return redirect(url_for("tables.split_form", table_id=table_id))
 
-        from src.routes.cashier import _current_order_number, _calc_totals
+        from src.routes.cashier import _current_order_number
+        from src.models import Shift
+        shift = db.query(Shift).filter(Shift.status == "open").order_by(Shift.opened_at.desc()).first()
 
         if action == "partial_pay":
-            # Create a new order with the selected items, then redirect to
-            # the cashier payment flow so the user sees the payment modal.
-            from src.models import Shift
-            shift = db.query(Shift).filter(Shift.status == "open").order_by(Shift.opened_at.desc()).first()
-
             partial_order = Order(
                 order_number=_current_order_number(),
                 status="open",
@@ -252,29 +315,15 @@ def split_execute(table_id: int):
             db.add(partial_order)
             db.flush()
 
-            # Move selected lines to the partial order
-            db.query(OrderLine).filter(
-                OrderLine.id.in_(line_ids), OrderLine.voided == 0
-            ).update({"order_id": partial_order.id}, synchronize_session="fetch")
-
-            _calc_totals(partial_order)
-
-            # Recalc source (re-query to get fresh line list)
-            remaining = db.query(OrderLine).filter(
-                OrderLine.order_id == source_order.id, OrderLine.voided == 0
-            ).all()
-            source_order.total = round(sum(l.line_total for l in remaining), 2)
-            source_order.subtotal = round(source_order.total / 1.05, 2)
-            source_order.vat_amount = round(source_order.total - source_order.subtotal, 2)
-
+            _move_units(db, qty_map, partial_order.id)
+            _recalc_order(db, partial_order)
+            remaining = _recalc_order(db, source_order)
             if not remaining:
                 source_order.status = "voided"
                 table.current_order_id = None
                 table.status = "free"
-
             db.commit()
 
-            # Set the partial order as the active one and go to cashier with auto-pay flag
             session["current_order_id"] = partial_order.id
             session["auto_pay"] = True
             return redirect(url_for("cashier.index"))
@@ -282,14 +331,9 @@ def split_execute(table_id: int):
         # --- Split to another table ---
         if not target_table_id:
             return redirect(url_for("tables.split_form", table_id=table_id))
-
         target_table = db.get(FloorTable, target_table_id)
         if not target_table or target_table.status != "free":
             return redirect(url_for("tables.split_form", table_id=table_id))
-
-        # Create new order on target table
-        from src.models import Shift
-        shift = db.query(Shift).filter(Shift.status == "open").order_by(Shift.opened_at.desc()).first()
 
         new_order = Order(
             order_number=_current_order_number(),
@@ -301,24 +345,12 @@ def split_execute(table_id: int):
         db.add(new_order)
         db.flush()
 
-        # Move selected lines (bulk update avoids stale relationship)
-        db.query(OrderLine).filter(
-            OrderLine.id.in_(line_ids), OrderLine.voided == 0
-        ).update({"order_id": new_order.id}, synchronize_session="fetch")
-
-        _calc_totals(new_order)
-
-        # Recalc source with fresh data
-        remaining = db.query(OrderLine).filter(
-            OrderLine.order_id == source_order.id, OrderLine.voided == 0
-        ).all()
-        source_order.total = round(sum(l.line_total for l in remaining), 2)
-        source_order.subtotal = round(source_order.total / 1.05, 2)
-        source_order.vat_amount = round(source_order.total - source_order.subtotal, 2)
+        _move_units(db, qty_map, new_order.id)
+        _recalc_order(db, new_order)
+        remaining = _recalc_order(db, source_order)
 
         target_table.current_order_id = new_order.id
         target_table.status = "occupied"
-
         if not remaining:
             source_order.status = "voided"
             table.current_order_id = None

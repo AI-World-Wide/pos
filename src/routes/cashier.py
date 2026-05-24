@@ -69,14 +69,26 @@ def _get_or_create_order(db) -> Order:
     return order
 
 
+VAT_RATE = 0.05
+
+
+def _apply_vat(base: float):
+    """Add VAT on top of the item prices.
+
+    The displayed item prices are kept as-is (subtotal), then 5% VAT is
+    added to produce the total — i.e. the customer pays 5% more than the
+    sticker price. Returns (subtotal, vat_amount, total).
+    """
+    subtotal = round(base, 2)
+    vat = round(base * VAT_RATE, 2)
+    total = round(subtotal + vat, 2)
+    return subtotal, vat, total
+
+
 def _calc_totals(order: Order) -> None:
-    """Recalculate totals from active lines. VAT-inclusive model."""
-    total = sum(
-        l.line_total for l in order.lines if not l.voided
-    )
-    order.total = round(total, 2)
-    order.subtotal = round(total / 1.05, 2)
-    order.vat_amount = round(order.total - order.subtotal, 2)
+    """Recalculate order totals — 5% VAT added on top of item prices."""
+    base = sum(l.line_total for l in order.lines if not l.voided)
+    order.subtotal, order.vat_amount, order.total = _apply_vat(base)
 
 
 @bp.get("/")
@@ -558,6 +570,7 @@ def _get_order_view_data(db, order=None) -> dict:
             "table_info": table_info,
             "move_targets": [],
             "opened_at": None,
+            "note": "",
         }
     lines = [
         {

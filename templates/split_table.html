@@ -7,13 +7,21 @@
     <h2 style="font-size:18px;margin-bottom:12px">{{ t.select_items }}</h2>
     <form method="post" action="{{ url_for('tables.split_execute', table_id=table.id) }}" id="split-form">
       {% for l in lines %}
-        <label style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #eee;cursor:pointer;font-size:16px">
-          <input type="checkbox" name="line_ids" value="{{ l.id }}" class="split-check"
-                 onchange="updateSplitTotal()" style="width:22px;height:22px">
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #eee;font-size:16px">
           <span style="flex:1;font-weight:600">{{ l.name_ar }}</span>
-          <span style="color:#666">×{{ l.qty }}</span>
-          <span style="font-weight:700">{{ t.currency }} {{ "%.2f"|format(l.line_total) }}</span>
-        </label>
+          <span style="color:#666;font-size:14px">{{ t.currency }} {{ "%.2f"|format(l.unit_price) }} × {{ l.qty }}</span>
+          <!-- per-unit quantity stepper: how many of this item to move (0..qty) -->
+          <div style="display:flex;align-items:center;gap:6px">
+            <button type="button" class="qty-btn qty-btn--dec" style="width:38px;height:38px;font-size:22px"
+                    onclick="stepQty({{ l.id }}, -1, {{ l.qty }})">−</button>
+            <input type="number" name="qty_{{ l.id }}" id="qty-{{ l.id }}"
+                   value="0" min="0" max="{{ l.qty }}" inputmode="numeric"
+                   class="form-input" style="width:60px;height:38px;text-align:center;font-weight:700"
+                   onchange="clampQty({{ l.id }}, {{ l.qty }});updateSplitTotal()">
+            <button type="button" class="qty-btn qty-btn--inc" style="width:38px;height:38px;font-size:22px"
+                    onclick="stepQty({{ l.id }}, 1, {{ l.qty }})">+</button>
+          </div>
+        </div>
       {% endfor %}
 
       <div style="margin-top:14px;padding:14px;background:#faf8f4;border-radius:8px;display:flex;justify-content:space-between;font-size:18px">
@@ -55,26 +63,49 @@
 </div>
 
 <script>
-var prices = {
-  {% for l in lines %}"{{ l.id }}": {{ l.line_total }},{% endfor %}
+// per-unit price for each line
+var unitPrices = {
+  {% for l in lines %}"{{ l.id }}": {{ l.unit_price }},{% endfor %}
 };
+function clampQty(id, maxQty) {
+  var el = document.getElementById('qty-' + id);
+  var v = parseInt(el.value) || 0;
+  if (v < 0) v = 0;
+  if (v > maxQty) v = maxQty;
+  el.value = v;
+}
+function stepQty(id, delta, maxQty) {
+  var el = document.getElementById('qty-' + id);
+  var v = (parseInt(el.value) || 0) + delta;
+  if (v < 0) v = 0;
+  if (v > maxQty) v = maxQty;
+  el.value = v;
+  updateSplitTotal();
+}
 function updateSplitTotal() {
   var total = 0;
-  document.querySelectorAll('.split-check:checked').forEach(function(cb) {
-    total += prices[cb.value] || 0;
-  });
+  for (var id in unitPrices) {
+    var el = document.getElementById('qty-' + id);
+    var n = el ? (parseInt(el.value) || 0) : 0;
+    total += unitPrices[id] * n;
+  }
   document.getElementById('split-total').textContent = 'AED ' + total.toFixed(2);
 }
+function totalSelected() {
+  var n = 0;
+  for (var id in unitPrices) {
+    var el = document.getElementById('qty-' + id);
+    n += el ? (parseInt(el.value) || 0) : 0;
+  }
+  return n;
+}
 function doSplit(action) {
-  var checked = document.querySelectorAll('.split-check:checked');
-  if (checked.length === 0) { alert('اختر الأصناف أولاً'); return; }
-
+  if (totalSelected() === 0) { alert('اختر عدد الأصناف أولاً'); return; }
   if (action === 'split') {
     var target = document.getElementById('target-select').value;
     if (!target) { alert('اختر الطاولة أولاً'); return; }
     document.getElementById('split-target').value = target;
   }
-
   document.getElementById('split-action').value = action;
   document.getElementById('split-form').submit();
 }

@@ -76,13 +76,23 @@ function submitPayment(total) {
     document.getElementById('cash-input').style.borderColor = '#e74c3c';
     return;
   }
+  var btn = document.querySelector('.modal__confirm');
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
   var form = new FormData();
   form.append('method', payMethod);
   form.append('cash_received', cashVal);
   fetch('{{ url_for("cashier.settle_order") }}', {method: 'POST', body: form})
-    .then(r => r.text())
-    .then(html => {
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    })
+    .then(function(html) {
       document.getElementById('modal-overlay').innerHTML = html;
+    })
+    .catch(function(err) {
+      // Never leave a blank frozen overlay — re-enable and let staff retry/close.
+      if (btn) { btn.disabled = false; btn.textContent = '{{ t.payment_confirm }}'; }
+      alert('تعذر إتمام الدفع، حاول مرة أخرى');
     });
 }
 
