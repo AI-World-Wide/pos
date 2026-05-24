@@ -12,6 +12,7 @@ from src.reports import (
     get_credit_summary,
     get_current_shift_stats,
     get_daily_trend,
+    get_open_tables_summary,
     get_payment_breakdown,
     get_peak_hour,
     get_sales_by_cashier,
@@ -49,6 +50,7 @@ def index():
     shift_stats = get_current_shift_stats()
     table_orders = get_table_orders_history(period)
     orders_sheet = get_all_orders_sheet(period)
+    open_tables = get_open_tables_summary(period)
 
     return render_template("reports.html",
                            period=period,
@@ -64,7 +66,8 @@ def index():
                            trend=trend,
                            shift_stats=shift_stats,
                            table_orders=table_orders,
-                           orders_sheet=orders_sheet)
+                           orders_sheet=orders_sheet,
+                           open_tables=open_tables)
 
 
 @bp.get("/csv")

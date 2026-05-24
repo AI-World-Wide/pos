@@ -30,8 +30,12 @@
 <!-- Summary stats -->
 <div class="stats-grid">
   <div class="stat-card">
-    <div class="stat-card__value">{{ t.currency }} {{ "%.2f"|format(summary.total_sales) }}</div>
-    <div class="stat-card__label">{{ t.total_sales }}</div>
+    <div class="stat-card__value">{{ t.currency }} {{ "%.2f"|format(summary.total_with_vat) }}</div>
+    <div class="stat-card__label">{{ t.total_with_vat }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-card__value">{{ t.currency }} {{ "%.2f"|format(summary.subtotal_no_vat) }}</div>
+    <div class="stat-card__label">{{ t.subtotal_no_vat }}</div>
   </div>
   <div class="stat-card">
     <div class="stat-card__value">{{ t.currency }} {{ "%.2f"|format(summary.vat_collected) }}</div>
@@ -74,6 +78,45 @@
   </div>
   {% endif %}
 </div>
+
+<!-- Open / unpaid tables for the period -->
+{% if open_tables and open_tables.count > 0 %}
+<div class="card" style="margin-bottom:20px;border-right:5px solid #f39c12">
+  <h2 style="font-size:20px;margin-bottom:12px">{{ t.open_tables_section }}</h2>
+  <div class="stats-grid" style="margin-bottom:12px">
+    <div class="stat-card">
+      <div class="stat-card__value">{{ open_tables.count }}</div>
+      <div class="stat-card__label">{{ t.open_tables_count }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card__value">{{ t.currency }} {{ "%.2f"|format(open_tables.total_due) }}</div>
+      <div class="stat-card__label">{{ t.open_tables_due }}</div>
+    </div>
+  </div>
+  {% if open_tables.tables %}
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>{{ t.order_number }}</th>
+        <th>{{ t.tables }}</th>
+        <th>{{ t.opened }}</th>
+        <th>{{ t.total }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ot in open_tables.tables %}
+      <tr>
+        <td>{{ ot.order_number }}</td>
+        <td>{{ ot.area_name }} - {{ ot.table_label }}</td>
+        <td>{{ ot.opened }}</td>
+        <td>{{ t.currency }} {{ "%.2f"|format(ot.total) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endif %}
 
 <a href="{{ url_for('reports.export_csv', period=period) }}" class="btn btn--primary" style="margin-bottom:20px">{{ t.export_csv }}</a>
 

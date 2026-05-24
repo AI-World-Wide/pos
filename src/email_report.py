@@ -20,6 +20,7 @@ from src.models import Setting
 from src.reports import (
     generate_csv,
     get_credit_summary,
+    get_open_tables_summary,
     get_sales_by_cashier,
     get_sales_by_category,
     get_summary,
@@ -151,8 +152,18 @@ def _xoauth2_string(user: str, access_token: str) -> str:
     return base64.b64encode(auth.encode()).decode()
 
 
-def _send_gmail(to_list: list[str], subject: str, html_body: str, csv_attachment: str | None = None) -> str:
-    """Send email via Gmail SMTP with XOAUTH2."""
+def _send_gmail(
+    to_list: list[str],
+    subject: str,
+    html_body: str,
+    csv_attachment: str | None = None,
+    pdf_attachment: bytes | None = None,
+    pdf_filename: str = "report.pdf",
+) -> str:
+    """Send email via Gmail SMTP with XOAUTH2.
+
+    Optional CSV and PDF attachments can be sent together.
+    """
     db = SessionLocal()
     try:
         sender = _get_setting(db, "gmail_sender_email")
@@ -177,6 +188,12 @@ def _send_gmail(to_list: list[str], subject: str, html_body: str, csv_attachment
                 csv_part.add_header("Content-Disposition", "attachment", filename="report.csv")
                 msg.attach(csv_part)
 
+            if pdf_attachment:
+                from email.mime.application import MIMEApplication
+                pdf_part = MIMEApplication(pdf_attachment, _subtype="pdf")
+                pdf_part.add_header("Content-Disposition", "attachment", filename=pdf_filename)
+                msg.attach(pdf_part)
+
             server = smtplib.SMTP(GMAIL_SMTP_HOST, GMAIL_SMTP_PORT, timeout=30)
             server.starttls()
             xoauth2 = _xoauth2_string(sender, access_token)
@@ -197,8 +214,14 @@ def _send_gmail(to_list: list[str], subject: str, html_body: str, csv_attachment
     return "Email failed"
 
 
-def _build_report_html(period: str = "today", includes: dict | None = None) -> str:
-    """Build HTML email body based on selected report sections."""
+def _build_report_html(period: str = "today", includes: dict | None = None, force_full_summary: bool = False) -> str:
+    """Build HTML email body based on selected report sections.
+
+    The PRIMARY summary table always includes every key analytics number
+    when `force_full_summary` is True (closing-day email). Otherwise it
+    respects the `include_sales_summary` toggle for backwards-compatible
+    scheduled reports.
+    """
     if includes is None:
         includes = {k: True for k in [
             "include_sales_summary", "include_top_items", "include_category_breakdown",
@@ -208,15 +231,23 @@ def _build_report_html(period: str = "today", includes: dict | None = None) -> s
     html = f'<html dir="rtl" lang="ar"><body style="font-family:Arial,sans-serif;direction:rtl;">'
     html += f'<h2>{T["reports_title"]}</h2>'
 
-    if includes.get("include_sales_summary"):
+    show_summary = force_full_summary or includes.get("include_sales_summary")
+    if show_summary:
         summary = get_summary(period)
-        html += '<table style="border-collapse:collapse;width:100%;max-width:500px;margin-bottom:20px">'
-        for label, val in [
-            (T["total_sales"], f'{T["currency"]} {summary["total_sales"]:.2f}'),
+        open_t = get_open_tables_summary(period)
+        html += '<table style="border-collapse:collapse;width:100%;max-width:560px;margin-bottom:20px">'
+        rows = [
+            (T.get("total_with_vat", T["total_sales"]), f'{T["currency"]} {summary["total_with_vat"]:.2f}'),
+            (T.get("subtotal_no_vat", "Subtotal"), f'{T["currency"]} {summary["subtotal_no_vat"]:.2f}'),
             (T["vat_collected"], f'{T["currency"]} {summary["vat_collected"]:.2f}'),
+            (T.get("cash_total", T.get("cash_payments", "Cash")), f'{T["currency"]} {summary["cash_total"]:.2f}'),
+            (T.get("card_total", T.get("card_payments", "Card")), f'{T["currency"]} {summary["card_total"]:.2f}'),
             (T["order_count"], str(summary["order_count"])),
             (T["avg_order_value"], f'{T["currency"]} {summary["avg_order_value"]:.2f}'),
-        ]:
+            (T.get("open_tables_count", "Open tables"), str(open_t["count"])),
+            (T.get("open_tables_due", "Open tables due"), f'{T["currency"]} {open_t["total_due"]:.2f}'),
+        ]
+        for label, val in rows:
             html += f'<tr><td style="padding:8px;border:1px solid #ddd">{label}</td>'
             html += f'<td style="padding:8px;border:1px solid #ddd"><strong>{val}</strong></td></tr>'
         html += '</table>'
@@ -263,8 +294,13 @@ def _build_report_html(period: str = "today", includes: dict | None = None) -> s
     return html
 
 
-def send_daily_report(period: str = "today") -> str:
-    """Send the configured daily report."""
+def send_daily_report(period: str = "today", force_full_summary: bool = False, include_pdf: bool = False) -> str:
+    """Send the configured daily report.
+
+    `force_full_summary`: ignore the include_sales_summary toggle and put
+    every analytics number in the primary table (used by closing email).
+    `include_pdf`: also attach a full multi-section PDF report.
+    """
     db = SessionLocal()
     try:
         recipients_str = _get_setting(db, "email_recipients")
@@ -281,13 +317,37 @@ def send_daily_report(period: str = "today") -> str:
     finally:
         db.close()
 
-    html = _build_report_html(period, includes)
+    html = _build_report_html(period, includes, force_full_summary=force_full_summary)
     csv = generate_csv(period)
-    return _send_gmail(recipients, f"Cafe POS — Daily Report", html, csv)
+
+    pdf_bytes = None
+    pdf_filename = "report.pdf"
+    if include_pdf:
+        try:
+            from src.pdf_report import build_closing_report_pdf
+            pdf_bytes = build_closing_report_pdf(period)
+            from datetime import date as _date
+            pdf_filename = f"cafe_pos_report_{_date.today().isoformat()}.pdf"
+        except Exception as e:
+            logger.error("PDF build failed: %s", e)
+
+    return _send_gmail(
+        recipients,
+        "Cafe POS — Daily Report",
+        html,
+        csv_attachment=csv,
+        pdf_attachment=pdf_bytes,
+        pdf_filename=pdf_filename,
+    )
 
 
 def send_shift_report(shift_id: int) -> str:
-    """Send report when a shift/day is closed."""
+    """Send report when a shift/day is closed.
+
+    Sent IMMEDIATELY when the day is closed (not on any timer). The email
+    body's primary table contains every analytics number, and a full PDF
+    of every report sheet is attached.
+    """
     db = SessionLocal()
     try:
         on_close = _get_setting(db, "report_on_close")
@@ -295,4 +355,4 @@ def send_shift_report(shift_id: int) -> str:
             return "Report on close disabled"
     finally:
         db.close()
-    return send_daily_report("today")
+    return send_daily_report("today", force_full_summary=True, include_pdf=True)

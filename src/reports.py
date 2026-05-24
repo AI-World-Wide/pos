@@ -40,7 +40,15 @@ def _date_range(period: str) -> tuple[datetime, datetime]:
 
 
 def get_summary(period: str = "today") -> dict:
-    """Get sales summary for a period."""
+    """Get sales summary for a period — VAT-inclusive prices.
+
+    Returns:
+      total_with_vat / total_sales: customer-paid total (VAT included)
+      subtotal_no_vat: total minus VAT (the "net" sales)
+      vat_collected: VAT portion of the sales
+      cash_total / card_total: how much of total_with_vat came from each method
+      order_count, avg_order_value
+    """
     start, end = _date_range(period)
     db = SessionLocal()
     try:
@@ -49,16 +57,74 @@ def get_summary(period: str = "today") -> dict:
             .filter(Order.status == "settled", Order.created_at.between(start, end))
             .all()
         )
-        total_sales = sum(o.total for o in orders)
-        total_vat = sum(o.vat_amount for o in orders)
+        total_sales = sum(o.total or 0 for o in orders)
+        total_vat = sum(o.vat_amount or 0 for o in orders)
+        subtotal = sum(o.subtotal or 0 for o in orders)
+        cash_total = sum(o.total or 0 for o in orders if (o.payment_method or "").lower() == "cash")
+        card_total = sum(o.total or 0 for o in orders if (o.payment_method or "").lower() == "card")
         count = len(orders)
         avg = total_sales / count if count else 0
 
         return {
             "total_sales": round(total_sales, 2),
+            "total_with_vat": round(total_sales, 2),
+            "subtotal_no_vat": round(subtotal, 2),
             "vat_collected": round(total_vat, 2),
+            "cash_total": round(cash_total, 2),
+            "card_total": round(card_total, 2),
             "order_count": count,
             "avg_order_value": round(avg, 2),
+        }
+    finally:
+        db.close()
+
+
+def get_open_tables_summary(period: str = "today") -> dict:
+    """Count and total-due of currently OPEN (unpaid) tables.
+
+    An open table is one with an order in status 'open' or 'sent'. The
+    period filter is applied against the order's created_at, so the
+    caller can ask "how many tables opened today are still unpaid?".
+
+    Returns:
+      count: number of open tables in the period
+      total_due: sum of their current order totals (VAT-inclusive)
+      tables: list of dicts with table label, total, order_number, opened
+    """
+    start, end = _date_range(period)
+    db = SessionLocal()
+    try:
+        orders = (
+            db.query(Order)
+            .filter(
+                Order.status.in_(("open", "sent")),
+                Order.created_at.between(start, end),
+            )
+            .all()
+        )
+        total = 0.0
+        details = []
+        for o in orders:
+            total += o.total or 0
+            table_label = ""
+            area_name = ""
+            if o.table_id:
+                ft = db.get(FloorTable, o.table_id)
+                if ft:
+                    table_label = str(ft.number)
+                    area = db.get(Area, ft.area_id)
+                    area_name = area.name_ar if area else ""
+            details.append({
+                "table_label": table_label,
+                "area_name": area_name,
+                "order_number": o.order_number,
+                "total": round(o.total or 0, 2),
+                "opened": o.created_at.strftime("%d/%m %H:%M") if o.created_at else "",
+            })
+        return {
+            "count": len(details),
+            "total_due": round(total, 2),
+            "tables": details,
         }
     finally:
         db.close()

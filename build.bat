@@ -29,6 +29,8 @@ pyinstaller --noconfirm ^
     --hidden-import=src.kitchen_ticket ^
     --hidden-import=src.reports ^
     --hidden-import=src.email_report ^
+    --hidden-import=src.pdf_report ^
+    --hidden-import=fpdf ^
     --hidden-import=src.seed_users ^
     --hidden-import=src.translations ^
     --hidden-import=src.translations.ar ^
@@ -48,7 +50,6 @@ pyinstaller --noconfirm ^
 if errorlevel 1 (
     echo.
     echo BUILD FAILED — check the output above for errors.
-    pause
     exit /b 1
 )
 
@@ -74,4 +75,3 @@ echo   1. Copy dist\ folder to USB
 echo   2. On the Dell: copy to C:\CafePOS\
 echo   3. Run install_on_dell.bat
 echo ============================================================
-pause
