@@ -364,6 +364,7 @@
 .action-btn--cancel { background: #c0392b; }
 .action-btn--send   { background: #2980b9; }
 .action-btn--pay    { background: #27ae60; grid-column: span 2; }
+.action-btn--invoice { background: #8e44ad; grid-column: span 3; }
 .action-btn--delete { background: #e74c3c; }
 
 /* --- Modal overlay --- */

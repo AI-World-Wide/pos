@@ -105,8 +105,13 @@ def _get_setting(db, key: str, fallback: str = "") -> str:
     return fallback
 
 
-def render_receipt(order: Order, db) -> Image.Image:
-    """Render a full customer receipt as a Pillow Image (576px wide)."""
+def render_receipt(order: Order, db, as_invoice: bool = False) -> Image.Image:
+    """Render a customer receipt (or invoice) as a Pillow Image (576px wide).
+
+    as_invoice=True produces a pre-payment invoice: a "فاتورة / INVOICE"
+    header is shown and the payment lines (cash received / change) are
+    omitted, since the customer hasn't paid yet.
+    """
     W = RECEIPT_WIDTH
     MARGIN = 20
 
@@ -189,6 +194,12 @@ def render_receipt(order: Order, db) -> Image.Image:
 
     y = draw_line(y)
 
+    # Invoice header (pre-payment document)
+    if as_invoice:
+        draw_center("فاتورة / INVOICE", font_total, y)
+        y += 48
+        y = draw_line(y)
+
     # Date/time (exact), order number, table, cashier
     now = order.closed_at or datetime.now()
     date_str = now.strftime("%d/%m/%Y  %I:%M %p")
@@ -249,19 +260,23 @@ def render_receipt(order: Order, db) -> Image.Image:
 
     y = draw_line(y)
 
-    # Cash payment details
-    if order.payment_method == "cash" and order.cash_received:
+    # Cash payment details (receipts only; an invoice isn't paid yet)
+    if not as_invoice and order.payment_method == "cash" and order.cash_received:
         draw_row(T["cash_received"], f"{T['currency']} {order.cash_received:.2f}", font_normal, y)
         y += 38
         draw_row(T["change_due"], f"{T['currency']} {order.change_due:.2f}", font_normal, y)
         y += 38
         y = draw_line(y)
 
-    # Thank you
-    draw_center(T["receipt_thanks_1"], font_normal, y)
-    y += 40
-    draw_center(T["receipt_thanks_2"], font_small, y)
-    y += 36
+    # Footer: thank-you on receipts; "not a tax receipt" note on invoices.
+    if as_invoice:
+        draw_center("هذه فاتورة وليست إيصال دفع", font_small, y)
+        y += 36
+    else:
+        draw_center(T["receipt_thanks_1"], font_normal, y)
+        y += 40
+        draw_center(T["receipt_thanks_2"], font_small, y)
+        y += 36
 
     # Crop to actual content
     img = img.crop((0, 0, W, y + 20))

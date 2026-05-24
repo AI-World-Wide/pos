@@ -180,6 +180,7 @@ T = {
     "item_note": "ملاحظة على الصنف",
     "table_note": "ملاحظة على الطاولة",
     "note_placeholder": "ملاحظة...",
+    "print_invoice": "طباعة فاتورة",
 
     # Floor plan / Tables
     "floor_plan": "خريطة الطاولات",

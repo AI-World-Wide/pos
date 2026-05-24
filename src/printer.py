@@ -164,6 +164,11 @@ def print_receipt_and_kick(order_id: int) -> None:
     _queue_print(order_id, "receipt")
 
 
+def print_invoice(order_id: int) -> None:
+    """Print a pre-payment invoice (no payment info) on the receipt printer."""
+    _queue_print(order_id, "invoice")
+
+
 def print_kitchen_ticket(order_id: int, line_ids: list[int] | None = None) -> None:
     """Print kitchen ticket for the given (kitchen-station) lines."""
     _queue_print(order_id, "kitchen", line_ids=line_ids)
@@ -221,6 +226,10 @@ def _attempt_print(pq_id: int, line_ids: list[int] | None = None) -> None:
             if pq.type == "receipt":
                 from src.receipt import render_receipt
                 img = render_receipt(order, db)
+                printer_name = _get_printer_name("receipt")
+            elif pq.type == "invoice":
+                from src.receipt import render_receipt
+                img = render_receipt(order, db, as_invoice=True)
                 printer_name = _get_printer_name("receipt")
             elif pq.type == "shisha":
                 from src.kitchen_ticket import render_kitchen_ticket

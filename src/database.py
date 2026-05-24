@@ -78,6 +78,7 @@ def init_db() -> None:
         session.commit()
 
     _seed_printers()
+    _reconcile_printers()
 
     # Auto-import items from seed XLSX if the items table is empty
     with SessionLocal() as session:
@@ -168,6 +169,65 @@ def _seed_printers() -> None:
             logger.info("Seeded printers: %s", seeded_names)
     except Exception as e:
         logger.error("Printer seeding failed: %s", e)
+
+
+def _reconcile_printers() -> None:
+    """One-time corrective: force the [printers] mappings to match config
+    when `reconcile_version` is bumped (e.g. switching the receipt printer
+    from Cashier to Cashier2). Runs once per version, so it doesn't fight
+    manual Settings changes afterwards.
+    """
+    import configparser
+    import logging
+    from src.models import Printer, Setting
+    logger = logging.getLogger(__name__)
+
+    try:
+        cfg = configparser.ConfigParser()
+        cfg.read(CONFIG_PATH, encoding="utf-8")
+        if not cfg.has_section("printers"):
+            return
+        cfg_ver = cfg.get("printers", "reconcile_version", fallback="0").strip()
+        if cfg_ver in ("", "0"):
+            return
+
+        with SessionLocal() as s:
+            stored = s.query(Setting).filter(Setting.key == "printers_reconcile_version").first()
+            if stored and stored.value == cfg_ver:
+                return  # already applied this version
+
+            def _set_purpose(purpose, name):
+                if not name:
+                    return
+                # Drop other rows currently holding this purpose.
+                for p in s.query(Printer).filter(Printer.purpose == purpose).all():
+                    if p.name != name:
+                        s.delete(p)
+                s.flush()
+                row = s.query(Printer).filter(Printer.name == name).first()
+                if row:
+                    row.purpose = purpose
+                    row.enabled = True
+                else:
+                    s.add(Printer(name=name, purpose=purpose, enabled=True))
+                s.flush()
+
+            receipt = cfg.get("printers", "receipt", fallback="").strip()
+            _set_purpose("receipt", receipt)
+            _set_purpose("kitchen", cfg.get("printers", "kitchen", fallback="").strip())
+            _set_purpose("shisha", cfg.get("printers", "shisha", fallback="").strip())
+            drawer = cfg.get("printers", "cash_drawer", fallback="").strip()
+            if drawer and drawer != receipt:
+                _set_purpose("cash_drawer", drawer)
+
+            if stored:
+                stored.value = cfg_ver
+            else:
+                s.add(Setting(key="printers_reconcile_version", value=cfg_ver))
+            s.commit()
+            logger.info("Printers reconciled to config (version %s)", cfg_ver)
+    except Exception as e:
+        logger.error("Printer reconcile failed: %s", e)
 
 
 def _auto_import_items(session) -> None:

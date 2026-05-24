@@ -135,6 +135,11 @@
           hx-post="{{ url_for('cashier.cancel_order') }}"
           hx-target="#order-panel" hx-swap="innerHTML"
           hx-confirm="هل أنت متأكد من إلغاء الطلب؟">{{ t.cancel }}</button>
+  {% if order.id %}
+  <button class="action-btn action-btn--invoice"
+          hx-post="{{ url_for('cashier.print_invoice_order') }}"
+          hx-swap="none">{{ t.print_invoice }}</button>
+  {% endif %}
   {% if session.get('role') == 'admin' or session.get('can_send_to_kitchen', True) %}
   <button class="action-btn action-btn--send"
           hx-post="{{ url_for('cashier.send_to_kitchen') }}"

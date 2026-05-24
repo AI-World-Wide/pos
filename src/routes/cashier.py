@@ -417,6 +417,32 @@ def pay_order():
         db.close()
 
 
+@bp.post("/order/invoice")
+def print_invoice_order():
+    """Print a pre-payment invoice for the current order (any role).
+
+    Does not change order state and does not record payment — it's the
+    itemized bill a customer can ask for before paying. The receipt (with
+    payment details) still prints separately at settle time.
+    """
+    db = get_session()
+    try:
+        order_id = session.get("current_order_id")
+        order = db.get(Order, order_id) if order_id else None
+        if not order or not [l for l in order.lines if not l.voided]:
+            return "", 204
+        _calc_totals(order)
+        db.commit()
+        try:
+            from src.printer import print_invoice
+            print_invoice(order.id)
+        except Exception:
+            pass  # print failures handled by the print queue
+        return "", 204
+    finally:
+        db.close()
+
+
 @bp.post("/order/settle")
 def settle_order():
     """Complete payment, print receipt, kick drawer."""
