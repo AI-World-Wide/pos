@@ -103,6 +103,9 @@
   <form method="post" action="{{ url_for('settings.test_drawer') }}" style="margin-top:14px;display:inline-block;margin-right:8px">
     <button type="submit" class="btn btn--primary">{{ t.test_drawer }}</button>
   </form>
+  <form method="post" action="{{ url_for('settings.autodetect_drawer') }}" style="margin-top:14px;display:inline-block;margin-right:8px">
+    <button type="submit" class="btn btn--success">{{ t.autodetect_drawer }}</button>
+  </form>
   <p style="color:#666;font-size:13px;margin-top:10px">{{ t.cash_drawer_hint }}</p>
 </div>
 

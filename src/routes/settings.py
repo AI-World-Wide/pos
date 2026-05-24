@@ -330,3 +330,59 @@ def test_drawer():
     except Exception as e:
         flash(f"Drawer error: {e}", "error")
     return redirect(url_for("settings.index"))
+
+
+@bp.post("/autodetect-drawer")
+def autodetect_drawer():
+    """Auto-find the printer the cash drawer is attached to, map it as the
+    cash_drawer printer, and fire a test kick.
+
+    A cash drawer has no independent connection — it plugs into a thermal
+    printer's drawer port and is opened by an ESC/POS pulse. So "finding"
+    the drawer means picking the most likely printer and pulsing it:
+      1. an already-mapped cash_drawer printer, else
+      2. the receipt printer, else
+      3. the first enabled printer in the DB, else
+      4. the first Windows-discovered printer.
+    The chosen printer is saved as the cash_drawer mapping (auto-connect),
+    then a kick is sent so the operator can confirm the drawer opened.
+    """
+    from src.printer import (
+        _get_printer_name_strict,
+        _send_raw_to_printer,
+        _kick_drawer_bytes,
+        discover_printers,
+    )
+    db = get_session()
+    try:
+        target = _get_printer_name_strict("cash_drawer")
+        if not target:
+            target = _get_printer_name_strict("receipt")
+        if not target:
+            first = db.query(Printer).filter(Printer.enabled == True).first()
+            target = first.name if first else None
+        if not target:
+            discovered = discover_printers()
+            target = discovered[0]["name"] if discovered else None
+
+        if not target:
+            flash("No printers found to connect the drawer to", "error")
+            return redirect(url_for("settings.index"))
+
+        # Auto-connect: save (or update) this printer as the cash_drawer.
+        existing = db.query(Printer).filter(Printer.name == target).first()
+        if existing:
+            existing.purpose = "cash_drawer"
+            existing.enabled = True
+        else:
+            db.add(Printer(name=target, purpose="cash_drawer", enabled=True))
+        db.commit()
+
+        # Test it.
+        _send_raw_to_printer(target, b"\x1b\x40" + _kick_drawer_bytes())
+        flash(f"Drawer connected to '{target}' and test kick sent", "success")
+    except Exception as e:
+        flash(f"Drawer auto-detect error: {e}", "error")
+    finally:
+        db.close()
+    return redirect(url_for("settings.index"))

@@ -137,6 +137,7 @@ T = {
     "printer_shisha": "شيشة",
     "printer_cash_drawer": "درج النقد",
     "test_drawer": "اختبار درج النقد",
+    "autodetect_drawer": "اكتشاف الدرج وربطه تلقائياً",
     "cash_drawer_hint": "يُفتح الدرج تلقائياً عند الدفع نقداً فقط — لا يُفتح مع البطاقة",
     "discover_printers": "البحث عن الطابعات",
     "no_printers": "لم يتم العثور على طابعات",

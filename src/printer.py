@@ -110,30 +110,46 @@ def _kick_drawer_bytes() -> bytes:
     return bytes(parts)
 
 
-def _image_to_escpos_raster(img) -> bytes:
-    """Convert a Pillow Image to ESC/POS raster bitmap bytes."""
-    from PIL import Image
+# Max raster lines per GS v 0 command. Cheap thermal printers have a small
+# per-command line buffer; sending one huge raster makes them flush/feed
+# mid-receipt (header on one slip, totals on the next). Splitting the image
+# into short bands sent back-to-back in the SAME job keeps it one continuous
+# slip. 128 is conservative and works on virtually all 80mm printers.
+_RASTER_BAND_HEIGHT = 128
 
+
+def _image_to_escpos_raster(img) -> bytes:
+    """Convert a Pillow Image to ESC/POS raster bytes as one continuous slip.
+
+    The image is emitted as consecutive GS v 0 bands (no cut/feed between
+    them) so the whole receipt prints as a single page regardless of height.
+    """
     # Convert to 1-bit BW
     bw = img.convert("1")
     width, height = bw.size
-    # ESC/POS raster: GS v 0
-    # Width in bytes = ceil(width/8)
     w_bytes = (width + 7) // 8
     pixels = bw.load()
 
-    buf = io.BytesIO()
-    # GS v 0 m xL xH yL yH
-    buf.write(b'\x1d\x76\x30\x00')
-    buf.write(struct.pack('<HH', w_bytes, height))
-
+    # Pre-pack every row into its byte representation once.
+    rows = []
     for y in range(height):
         row = bytearray(w_bytes)
         for x in range(width):
             # PIL 1-bit: 0=black, 255=white. ESC/POS: 1=black, 0=white
             if pixels[x, y] == 0:
                 row[x // 8] |= (0x80 >> (x % 8))
-        buf.write(bytes(row))
+        rows.append(bytes(row))
+
+    buf = io.BytesIO()
+    # Emit the rows in bands; each band is its own GS v 0 command.
+    for band_start in range(0, height, _RASTER_BAND_HEIGHT):
+        band_rows = rows[band_start:band_start + _RASTER_BAND_HEIGHT]
+        band_h = len(band_rows)
+        # GS v 0 m xL xH yL yH
+        buf.write(b'\x1d\x76\x30\x00')
+        buf.write(struct.pack('<HH', w_bytes, band_h))
+        for r in band_rows:
+            buf.write(r)
 
     return buf.getvalue()
 
