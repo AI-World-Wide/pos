@@ -147,7 +147,7 @@ def render_receipt(order: Order, db, as_invoice: bool = False) -> Image.Image:
     h += 50  # "Tax Invoice" header
     h += 34 * 3  # address (up to 2 lines) + TRN
     h += 10 + 2  # separator
-    h += 38 * 5  # date, invoice no, order number, table, cashier
+    h += 38 * 4  # date, invoice no, table, cashier
     h += 10 + 2  # separator
     h += 38  # header row
     h += 10 + 2  # separator
@@ -228,9 +228,6 @@ def render_receipt(order: Order, db, as_invoice: bool = False) -> Image.Image:
     y += 38
 
     draw_row(f"{T['invoice_no']}: {order.id}", "", font_normal, y)
-    y += 38
-
-    draw_row(f"{T['receipt_number']}: {order.order_number}", "", font_normal, y)
     y += 38
 
     if table_label:
