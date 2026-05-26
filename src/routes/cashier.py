@@ -225,9 +225,11 @@ def adjust_qty(line_id: int, action: str):
             line.quantity += 1
             line.line_total = round(line.quantity * line.unit_price_inclusive, 2)
         elif action in ("dec", "void"):
-            # Admin can do it directly; others need admin PIN
+            # Only items ALREADY SENT to the kitchen need an admin PIN to
+            # remove. Unsent (draft) items can be freely removed by anyone,
+            # even if other items on the same order were already sent.
             is_admin = session.get("role") == "admin"
-            if not is_admin:
+            if not is_admin and line.sent_to_kitchen:
                 admin_pin = request.headers.get("X-Admin-Pin", "")
                 if not admin_pin or not _verify_admin_pin(db, admin_pin):
                     order_data = _get_order_view_data(db, order)
@@ -558,13 +560,26 @@ def resume_order(order_id: int):
 
 @bp.post("/order/cancel")
 def cancel_order():
-    """Void entire current order."""
+    """Void entire current order.
+
+    A draft (no items sent yet) can be cancelled freely by anyone. Once any
+    item has been sent to the kitchen, cancelling the whole order requires
+    an admin PIN for non-admin users (passed via X-Admin-Pin header).
+    """
     db = get_session()
     try:
         order_id = session.get("current_order_id")
         if order_id:
             order = db.get(Order, order_id)
             if order and order.status in ("open", "sent"):
+                has_sent = any(l.sent_to_kitchen and not l.voided for l in order.lines)
+                is_admin = session.get("role") == "admin"
+                if has_sent and not is_admin:
+                    admin_pin = request.headers.get("X-Admin-Pin", "")
+                    if not admin_pin or not _verify_admin_pin(db, admin_pin):
+                        # Reject — keep the order intact and re-render it.
+                        order_data = _get_order_view_data(db, order)
+                        return render_template("partials/order_panel.html", order=order_data)
                 order.status = "voided"
                 for line in order.lines:
                     line.voided = 1
@@ -611,6 +626,7 @@ def _get_order_view_data(db, order=None) -> dict:
             "move_targets": [],
             "opened_at": None,
             "note": "",
+            "has_sent": False,
         }
     lines = [
         {
@@ -624,6 +640,7 @@ def _get_order_view_data(db, order=None) -> dict:
         }
         for l in order.lines if not l.voided
     ]
+    has_sent = any(l.sent_to_kitchen and not l.voided for l in order.lines)
     # Gather table info + areas for move dropdown
     table_info = None
     move_areas = []
@@ -665,4 +682,5 @@ def _get_order_view_data(db, order=None) -> dict:
         "move_targets": move_areas,
         "opened_at": order.created_at.isoformat() if order.created_at else None,
         "note": order.notes or "",
+        "has_sent": has_sent,
     }

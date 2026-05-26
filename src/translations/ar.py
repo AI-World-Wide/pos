@@ -181,6 +181,11 @@ T = {
     "table_note": "ملاحظة على الطاولة",
     "note_placeholder": "ملاحظة...",
     "print_invoice": "طباعة فاتورة",
+    "tax_invoice": "فاتورة ضريبية",
+    "invoice_no": "رقم الفاتورة",
+    "total_payable": "المبلغ المستحق",
+    "total_incl_vat": "الإجمالي شامل الضريبة",
+    "total_before_vat": "المجموع قبل الضريبة",
 
     # Floor plan / Tables
     "floor_plan": "خريطة الطاولات",

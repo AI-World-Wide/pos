@@ -113,13 +113,21 @@ def close_day():
         current.status = "closed"
         db.commit()
 
-        # Send email report if configured
-        try:
-            from src.email_report import send_shift_report
-            send_shift_report(current.id)
-        except Exception:
-            pass
-
-        return redirect(url_for("shift.index"))
+        shift_id = current.id
     finally:
         db.close()
+
+    # Send email report (outside the db block). Surface the result so the
+    # operator can see whether it sent and why if it didn't.
+    try:
+        import logging
+        from src.email_report import send_shift_report
+        result = send_shift_report(shift_id)
+        logging.getLogger(__name__).info("Shift close email: %s", result)
+        flash(result, "success" if "success" in (result or "").lower() else "error")
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("Shift close email failed: %s", e)
+        flash(f"Email error: {e}", "error")
+
+    return redirect(url_for("shift.index"))

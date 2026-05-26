@@ -46,7 +46,9 @@
           </span>
         </div>
         <div class="order-line__controls">
-          {% if session.get('role') == 'admin' %}
+          {# Unsent (draft) items can be reduced/removed freely by anyone.
+             Items already sent to the kitchen need an admin PIN. #}
+          {% if session.get('role') == 'admin' or not l.sent %}
             <button class="qty-btn qty-btn--dec"
                     hx-post="{{ url_for('cashier.adjust_qty', line_id=l.id, action='dec') }}"
                     hx-target="#order-panel" hx-swap="innerHTML">−</button>
@@ -58,7 +60,7 @@
           <button class="qty-btn qty-btn--inc"
                   hx-post="{{ url_for('cashier.adjust_qty', line_id=l.id, action='inc') }}"
                   hx-target="#order-panel" hx-swap="innerHTML">+</button>
-          {% if session.get('role') == 'admin' %}
+          {% if session.get('role') == 'admin' or not l.sent %}
             <button class="qty-btn qty-btn--void"
                     hx-post="{{ url_for('cashier.adjust_qty', line_id=l.id, action='void') }}"
                     hx-target="#order-panel" hx-swap="innerHTML">×</button>
@@ -131,10 +133,15 @@
           hx-target="#modal-overlay"
           hx-swap="innerHTML"
           onclick="document.getElementById('modal-overlay').style.display='flex'">{{ t.held_orders }}</button>
+  {% if session.get('role') == 'admin' or not order.has_sent %}
   <button class="action-btn action-btn--cancel"
           hx-post="{{ url_for('cashier.cancel_order') }}"
           hx-target="#order-panel" hx-swap="innerHTML"
           hx-confirm="هل أنت متأكد من إلغاء الطلب؟">{{ t.cancel }}</button>
+  {% else %}
+  <button class="action-btn action-btn--cancel"
+          onclick="showAdminPinModal('{{ url_for('cashier.cancel_order') }}')">{{ t.cancel }}</button>
+  {% endif %}
   {% if order.id %}
   <button class="action-btn action-btn--invoice"
           hx-post="{{ url_for('cashier.print_invoice_order') }}"

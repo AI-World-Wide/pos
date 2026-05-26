@@ -97,6 +97,7 @@ def _get_setting(db, key: str, fallback: str = "") -> str:
         "cafe_name_ar": ("cafe", "name_ar"),
         "cafe_name_en": ("cafe", "name_en"),
         "trn": ("cafe", "trn"),
+        "address": ("cafe", "address"),
         "vat_rate": ("vat", "rate"),
     }
     if key in section_map:
@@ -119,6 +120,7 @@ def render_receipt(order: Order, db, as_invoice: bool = False) -> Image.Image:
     cafe_name = _get_setting(db, "cafe_name_ar", T["cafe_name_default"])
     cafe_name_en = _get_setting(db, "cafe_name_en", "")
     trn = _get_setting(db, "trn", "100000000000000")
+    address = _get_setting(db, "address", "")
     lines = [l for l in order.lines if not l.voided]
 
     # Table label (e.g. "منطقة 1 - 5"), if this order is on a table.
@@ -142,14 +144,16 @@ def render_receipt(order: Order, db, as_invoice: bool = False) -> Image.Image:
     h = 40  # top padding
     h += 52  # cafe name (Arabic)
     h += 38  # cafe name (English)
+    h += 50  # "Tax Invoice" header
+    h += 34 * 3  # address (up to 2 lines) + TRN
     h += 10 + 2  # separator
-    h += 38 * 4  # date, order number, table, cashier
+    h += 38 * 5  # date, invoice no, order number, table, cashier
     h += 10 + 2  # separator
     h += 38  # header row
     h += 10 + 2  # separator
     h += len(lines) * 70  # item lines (Arabic + English = 2 lines each)
     h += 10 + 2  # separator
-    h += 38 * 3  # subtotal, vat, total
+    h += 38 * 4  # before-vat, vat, total incl vat, payable
     h += 10 + 2  # separator
     if order.payment_method == "cash":
         h += 38 * 2  # cash received, change
@@ -192,18 +196,38 @@ def render_receipt(order: Order, db, as_invoice: bool = False) -> Image.Image:
         draw_center(cafe_name_en, font_header, y)
         y += 38
 
-    y = draw_line(y)
-
-    # Invoice header (pre-payment document)
+    # Document title — "Tax Invoice" on the paid receipt, proforma otherwise.
     if as_invoice:
         draw_center("فاتورة / INVOICE", font_total, y)
-        y += 48
-        y = draw_line(y)
+        y += 50
+    else:
+        draw_center(f"{T['tax_invoice']} / TAX INVOICE", font_total, y)
+        y += 50
 
-    # Date/time (exact), order number, table, cashier
+    # Physical address (wrap to a second line if long) + TRN
+    if address:
+        if len(address) <= 38:
+            draw_center(address, font_small, y)
+            y += 32
+        else:
+            cut = address.rfind(",", 0, 38)
+            cut = cut if cut > 0 else 38
+            draw_center(address[:cut].strip(" ,"), font_small, y)
+            y += 30
+            draw_center(address[cut:].strip(" ,"), font_small, y)
+            y += 32
+    draw_center(f"TRN: {trn}", font_small, y)
+    y += 32
+
+    y = draw_line(y)
+
+    # Date/time (exact), invoice no, order number, table, cashier
     now = order.closed_at or datetime.now()
     date_str = now.strftime("%d/%m/%Y  %I:%M %p")
     draw_row(f"{T['receipt_date']}: {date_str}", "", font_normal, y)
+    y += 38
+
+    draw_row(f"{T['invoice_no']}: {order.id}", "", font_normal, y)
     y += 38
 
     draw_row(f"{T['receipt_number']}: {order.order_number}", "", font_normal, y)
@@ -247,15 +271,17 @@ def render_receipt(order: Order, db, as_invoice: bool = False) -> Image.Image:
 
     y = draw_line(y)
 
-    # Totals
-    draw_row(T["subtotal"], f"{T['currency']} {order.subtotal:.2f}", font_normal, y)
+    # Totals — net (before VAT), VAT 5% value, total incl VAT, payable.
+    draw_row(T["total_before_vat"], f"{T['currency']} {order.subtotal:.2f}", font_normal, y)
     y += 38
-    draw_row(T["vat_5"], f"{T['currency']} {order.vat_amount:.2f}", font_small, y)
+    draw_row(f"{T['vat_5']}", f"{T['currency']} {order.vat_amount:.2f}", font_normal, y)
+    y += 38
+    draw_row(T["total_incl_vat"], f"{T['currency']} {order.total:.2f}", font_normal, y)
     y += 38
 
     y = draw_line(y)
 
-    draw_row(T["total"], f"{T['currency']} {order.total:.2f}", font_total, y)
+    draw_row(T["total_payable"], f"{T['currency']} {order.total:.2f}", font_total, y)
     y += 50
 
     y = draw_line(y)
