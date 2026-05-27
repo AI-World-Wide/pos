@@ -152,6 +152,39 @@ def _xoauth2_string(user: str, access_token: str) -> str:
     return base64.b64encode(auth.encode()).decode()
 
 
+def _smtp_send_once(sender: str, access_token: str, to_list: list[str], msg) -> tuple[bool, str]:
+    """One SMTP attempt with a given access token. Returns (ok, detail).
+
+    Checks the XOAUTH2 AUTH response code explicitly — an expired token
+    fails here (not later as a generic error), so the caller can refresh
+    and retry deterministically.
+    """
+    server = None
+    try:
+        server = smtplib.SMTP(GMAIL_SMTP_HOST, GMAIL_SMTP_PORT, timeout=30)
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+        xoauth2 = _xoauth2_string(sender, access_token)
+        code, resp = server.docmd("AUTH", "XOAUTH2 " + xoauth2)
+        # 334 = server sent a base64 error challenge; ack with empty line to
+        # get the final status code.
+        if code == 334:
+            code, resp = server.docmd("")
+        if code != 235:
+            return False, f"AUTH {code}: {resp.decode(errors='replace') if isinstance(resp, bytes) else resp}"
+        server.sendmail(sender, to_list, msg.as_string())
+        return True, "Email sent successfully"
+    except Exception as e:
+        return False, str(e)
+    finally:
+        if server is not None:
+            try:
+                server.quit()
+            except Exception:
+                pass
+
+
 def _send_gmail(
     to_list: list[str],
     subject: str,
@@ -162,56 +195,60 @@ def _send_gmail(
 ) -> str:
     """Send email via Gmail SMTP with XOAUTH2.
 
-    Optional CSV and PDF attachments can be sent together.
+    Bulletproof token handling: the Gmail access token expires ~1 hour
+    after it's issued, so we ALWAYS mint a fresh one from the long-lived
+    refresh token right before sending. This means the operator connects
+    Gmail once and never has to re-authenticate (as long as the OAuth app
+    is published / "In production" in Google Cloud, refresh tokens don't
+    expire). Optional CSV + PDF attachments are supported.
     """
     db = SessionLocal()
     try:
         sender = _get_setting(db, "gmail_sender_email")
-        access_token = _get_setting(db, "gmail_access_token")
+        refresh_token = _get_setting(db, "gmail_refresh_token")
+        stored_token = _get_setting(db, "gmail_access_token")
     finally:
         db.close()
 
-    if not sender or not access_token:
-        return "Gmail not configured"
+    if not sender:
+        return "Gmail not configured — connect Gmail in Settings"
+    if not refresh_token and not stored_token:
+        return "Gmail not connected — open Settings and press Connect Gmail"
 
-    # Try with current token; refresh if needed
-    for attempt in range(2):
-        try:
-            msg = MIMEMultipart("mixed")
-            msg["Subject"] = subject
-            msg["From"] = sender
-            msg["To"] = ", ".join(to_list)
-            msg.attach(MIMEText(html_body, "html", "utf-8"))
+    # Always refresh first so every send uses a valid (fresh) access token.
+    access_token = _refresh_access_token() or stored_token
+    if not access_token:
+        return "Gmail auth failed — please reconnect Gmail in Settings"
 
-            if csv_attachment:
-                csv_part = MIMEText(csv_attachment, "csv", "utf-8")
-                csv_part.add_header("Content-Disposition", "attachment", filename="report.csv")
-                msg.attach(csv_part)
+    msg = MIMEMultipart("mixed")
+    msg["Subject"] = subject
+    msg["From"] = sender
+    msg["To"] = ", ".join(to_list)
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
+    if csv_attachment:
+        csv_part = MIMEText(csv_attachment, "csv", "utf-8")
+        csv_part.add_header("Content-Disposition", "attachment", filename="report.csv")
+        msg.attach(csv_part)
+    if pdf_attachment:
+        from email.mime.application import MIMEApplication
+        pdf_part = MIMEApplication(pdf_attachment, _subtype="pdf")
+        pdf_part.add_header("Content-Disposition", "attachment", filename=pdf_filename)
+        msg.attach(pdf_part)
 
-            if pdf_attachment:
-                from email.mime.application import MIMEApplication
-                pdf_part = MIMEApplication(pdf_attachment, _subtype="pdf")
-                pdf_part.add_header("Content-Disposition", "attachment", filename=pdf_filename)
-                msg.attach(pdf_part)
+    ok, detail = _smtp_send_once(sender, access_token, to_list, msg)
+    if ok:
+        return "Email sent successfully"
 
-            server = smtplib.SMTP(GMAIL_SMTP_HOST, GMAIL_SMTP_PORT, timeout=30)
-            server.starttls()
-            xoauth2 = _xoauth2_string(sender, access_token)
-            server.docmd("AUTH", f"XOAUTH2 {xoauth2}")
-            server.sendmail(sender, to_list, msg.as_string())
-            server.quit()
+    # One more try with a freshly refreshed token (covers a token that
+    # expired in the seconds between refresh and send, or a stale one).
+    logger.warning("Gmail send failed (%s); refreshing token and retrying", detail)
+    new_token = _refresh_access_token()
+    if new_token and new_token != access_token:
+        ok, detail = _smtp_send_once(sender, new_token, to_list, msg)
+        if ok:
             return "Email sent successfully"
-        except smtplib.SMTPAuthenticationError:
-            if attempt == 0:
-                access_token = _refresh_access_token()
-                if not access_token:
-                    return "Gmail auth failed — please reconnect"
-            else:
-                return "Gmail auth failed after refresh"
-        except Exception as e:
-            return f"Email error: {e}"
 
-    return "Email failed"
+    return f"Email error: {detail}"
 
 
 def _build_report_html(period: str = "today", includes: dict | None = None, force_full_summary: bool = False) -> str:
